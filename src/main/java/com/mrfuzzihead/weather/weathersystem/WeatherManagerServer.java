@@ -30,6 +30,8 @@ public class WeatherManagerServer extends WeatherManagerBase {
 
     public int syncRange = 256;
 
+    private final Random rand = new Random();
+
     private int tickerSyncWeatherCheckVanilla = 0;
     private int tickerSyncWeatherLowWind = 0;
     private int tickerSyncWeatherHighWind = 0;
@@ -139,8 +141,7 @@ public class WeatherManagerServer extends WeatherManagerBase {
             if (WeatherUtilConfig.listDimensionsClouds.contains(world.provider.dimensionId)
                 && (tickerSyncStormSpawnOrRemoveChecks == ConfigMisc.tickerRateSyncStormSpawnOrRemoveChecks)) {
                 tickerSyncStormSpawnOrRemoveChecks = 0;
-                for (int i = 0; i < getStormObjects().size(); i++) {
-                    StormObject so = getStormObjects().get(i);
+                for (int i = 0; i < getStormObjects().size(); i++) {                    StormObject so = getStormObjects().get(i);
                     EntityPlayer closestPlayer = world.getClosestPlayer(
                         so.posGround.xCoord,
                         so.posGround.yCoord,
@@ -149,12 +150,17 @@ public class WeatherManagerServer extends WeatherManagerBase {
 
                     // isDead check is done in WeatherManagerBase
                     if (closestPlayer == null) {
-                        removeStormObject(so.ID);
-                        syncStormRemove(so);
+                        // Only cull harmless storms (below STATE_HIGHWIND) when no player is nearby.
+                        // Dangerous storms (high wind, hail, tornado) are left to decay naturally
+                        // via tickProgression() so they do not vanish the instant a player leaves
+                        // the simBoxRadiusCutoff radius.
+                        if (so.levelCurIntensityStage < StormObject.STATE_HIGHWIND) {
+                            removeStormObject(so.ID);
+                            syncStormRemove(so);
+                        }
                     }
                 }
 
-                Random rand = new Random();
 
                 // cloud formation spawning - REFINE ME!
                 for (int i = 0; i < world.playerEntities.size(); i++) {
@@ -172,7 +178,7 @@ public class WeatherManagerServer extends WeatherManagerBase {
                         < ConfigMisc.Storm_MaxPerPlayerPerLayer * world.playerEntities.size()) {
                         if (ConfigMisc.Cloud_Layer1_Enable) {
                             if (rand.nextInt(5) == 0) {
-                                // trySpawnNearPlayerForLayer(entP, 1);
+                                trySpawnNearPlayerForLayer(entP, 1);
                             }
                         }
                     }
@@ -183,7 +189,6 @@ public class WeatherManagerServer extends WeatherManagerBase {
 
     public void trySpawnNearPlayerForLayer(EntityPlayer entP, int layer) {
 
-        Random rand = new Random();
 
         int tryCountMax = 10;
         int tryCountCur = 0;

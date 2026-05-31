@@ -41,12 +41,8 @@ public class EntityMovingBlock extends Entity implements IEntityAdditionalSpawnD
     public int type;
     public boolean noCollision;
     public boolean collideFalling = false;
-    public double vecX;
-    public double vecY;
-    public double vecZ;
     public double lastPosX;
     public double lastPosZ;
-    // public Entity controller;
     public StormObject owner;
     public int gravityDelay;
 
@@ -112,6 +108,19 @@ public class EntityMovingBlock extends Entity implements IEntityAdditionalSpawnD
         // new kill off when distant method
         if (!worldObj.isRemote) {
             if (this.worldObj.getClosestPlayer(this.posX, 50, this.posZ, 140) == null) {
+                // Restore the block at its current in-flight position so it is not
+                // permanently deleted when a player moves out of range.
+                if (!CoroUtilBlock.isAir(this.tile)) {
+                    int bx = MathHelper.floor_double(this.posX);
+                    int by = MathHelper.floor_double(this.posY);
+                    int bz = MathHelper.floor_double(this.posZ);
+                    if (this.worldObj.isAirBlock(bx, by, bz)) {
+                        this.worldObj.setBlock(bx, by, bz, this.tile, this.metadata, 3);
+                        if (this.tileentity != null) {
+                            this.worldObj.setTileEntity(bx, by, bz, this.tileentity);
+                        }
+                    }
+                }
                 setDead();
             }
         }
@@ -136,18 +145,7 @@ public class EntityMovingBlock extends Entity implements IEntityAdditionalSpawnD
             }
 
             if (this.type == 0) {
-                /*
-                 * if (this.controller != null) {
-                 * this.vecX = this.controller.posX - this.posX;
-                 * this.vecY = this.controller.boundingBox.minY + (double)(this.controller.height / 2.0F) - (this.posY +
-                 * (double)(this.height / 2.0F));
-                 * this.vecZ = this.controller.posZ - this.posZ;
-                 * } else {
-                 */
-                this.vecX++;
-                this.vecY++;
-                this.vecZ++;
-                // }
+                // controller tracking was removed; nothing to update here
             }
 
             if (this.mode == 1) {
@@ -378,30 +376,24 @@ public class EntityMovingBlock extends Entity implements IEntityAdditionalSpawnD
             || ConfigMisc.Storm_Tornado_rarityOfBreakOnFall > 0
                 && this.rand.nextInt(ConfigMisc.Storm_Tornado_rarityOfBreakOnFall + 1) != 0) {
             if (!WeatherUtil.shouldRemoveBlock(var5) && !WeatherUtil.isOceanBlock(var5) && var2 < 255) {
+                // Target position is solid — stack our block on top of it.
+                // Do NOT also write to var2; that would overwrite the solid block we just landed on.
                 this.worldObj.setBlock(var1, var2 + 1, var3, this.tile, this.metadata, 3);
-            }
+            } else {
+                // Target position is free (air, replaceable, etc.) — place directly there.
+                boolean var6 = false;
 
-            boolean var6 = false;
-
-            if (!WeatherUtil.isOceanBlock(var5)) {
-                if (this.worldObj.setBlock(var1, var2, var3, this.tile, this.metadata, 3)) {
-                    var6 = true;
+                if (!WeatherUtil.isOceanBlock(var5)) {
+                    if (this.worldObj.setBlock(var1, var2, var3, this.tile, this.metadata, 3)) {
+                        var6 = true;
+                    }
                 }
-            } /*
-               * else
-               * {
-               * this.worldObj.setBlock(var1, var2, var3, WeatherMod.finiteWaterId, this.metadata, 3);
-               * if (var2 < 255)
-               * {
-               * this.worldObj.setBlock(var1, var2 + 1, var3, WeatherMod.finiteWaterId, this.metadata, 3);
-               * }
-               * }
-               */
 
-            if (var6) {
-                // Block.blocksList[this.tile].onBlockPlacedBy(this.worldObj, var1, var2, var3, var4, this);
-                if (this.tileentity != null) {
-                    this.worldObj.setTileEntity(var1, var2, var3, this.tileentity);
+                if (var6) {
+                    // Block.blocksList[this.tile].onBlockPlacedBy(this.worldObj, var1, var2, var3, var4, this);
+                    if (this.tileentity != null) {
+                        this.worldObj.setTileEntity(var1, var2, var3, this.tileentity);
+                    }
                 }
             }
         }

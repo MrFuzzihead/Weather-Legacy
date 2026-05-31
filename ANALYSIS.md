@@ -8,7 +8,7 @@
 
 ## Critical / Severe Bug Fixes
 
-### 1. 🔴 Blocks Permanently Deleted by Tornado When No Player Is Nearby
+### 1. 🔴 Blocks Permanently Deleted by Tornado When No Player Is Nearby ✅ Fixed
 
 **Files:** `TornadoHelper.java`, `EntityMovingBlock.java`
 
@@ -26,7 +26,7 @@ If a player moves away from an already-flying block, the entity kills itself. Si
 
 ---
 
-### 2. 🔴 Incorrect 2D Distance Calculation in Tornado Pull Physics
+### 2. 🔴 Incorrect 2D Distance Calculation in Tornado Pull Physics ✅ Fixed
 
 **File:** `StormObject.java`, `spinEntity()` ~line 2108
 
@@ -43,9 +43,9 @@ The current formula grows much slower than actual distance and produces asymmetr
 
 ---
 
-### 3. 🔴 `new Random()` Instantiated Every Tick — Severe GC Pressure
+### 3. 🔴 `new Random()` Instantiated Every Tick — Severe GC Pressure ✅ Fixed
 
-**Files:** `StormObject.java`, `WindManager.java`, `WeatherManagerServer.java`
+**Files:** `StormObject.java`, `WindManager.java`, `WeatherManagerServer.java`, `TornadoHelper.java`
 
 `Random` objects are created every single tick (20×/second) across the codebase:
 
@@ -65,7 +65,7 @@ With multiple storms active and dozens of players, this creates **thousands of s
 
 ---
 
-### 4. 🔴 `StormObject.addWeatherEffectLightning()` Casts to Server Manager Unconditionally
+### 4. 🔴 `StormObject.addWeatherEffectLightning()` Casts to Server Manager Unconditionally ✅ Fixed
 
 **File:** `StormObject.java`, ~line 2432
 
@@ -82,7 +82,7 @@ This method is not `@SideOnly(Side.SERVER)` but unconditionally casts `manager` 
 
 ---
 
-### 5. 🟠 Storm Removed When No Player Nearby — Silent World-State Desync
+### 5. 🟠 Storm Removed When No Player Nearby — Silent World-State Desync ✅ Fixed
 
 **File:** `WeatherManagerServer.java`, ~lines 144–154
 
@@ -103,7 +103,7 @@ A fully-developed, deadly storm (e.g. a tornado at `STATE_STAGE5`) is silently r
 
 ---
 
-### 6. 🟠 `EntityMovingBlock.vecX/Y/Z` Are Incremented But Never Used
+### 6. 🟠 `EntityMovingBlock.vecX/Y/Z` Are Incremented But Never Used ✅ Fixed
 
 **File:** `EntityMovingBlock.java`, lines 147–150
 
@@ -117,7 +117,7 @@ These fields were intended as controller-tracking vectors (see the commented-out
 
 ---
 
-### 7. 🟠 Layer 1 Clouds Never Spawn — Dead Code Path
+### 7. 🟠 Layer 1 Clouds Never Spawn — Dead Code Path ✅ Fixed
 
 **File:** `WeatherManagerServer.java`, lines 171–178
 
@@ -131,7 +131,7 @@ The second cloud layer is configured (`Cloud_Layer1_Enable`, `Cloud_Layer0_Heigh
 
 ---
 
-### 8. 🟠 Default Block Grab List Breaks When List Mode Is Enabled
+### 8. 🟠 Default Block Grab List Breaks When List Mode Is Enabled ✅ Fixed
 
 **File:** `ConfigMisc.java`, line 61
 
@@ -145,7 +145,7 @@ The default list has a **space after the comma**. If `Storm_Tornado_GrabCond_Lis
 
 ---
 
-### 9. 🟠 `blockify` Can Place a Block One Y-Level Too High
+### 9. 🟠 `blockify` Can Place a Block One Y-Level Too High ✅ Fixed
 
 **File:** `EntityMovingBlock.java`, `blockify()`, lines 380–382
 
@@ -161,7 +161,7 @@ When a block lands, it attempts to place at **both `var2` and `var2 + 1`** if th
 
 ---
 
-### 10. 🟡 `Vec3.createVectorHelper` Pool Mutation
+### 10. 🟡 `Vec3.createVectorHelper` Pool Mutation ✅ Fixed
 
 **File:** `StormObject.java`, `tickWeatherEvents()` ~line 522
 
@@ -233,4 +233,6 @@ The `nbtStormsForIMC()` method already broadcasts storm positions, types, and in
 - A **query channel** where other mods can request weather at a specific coordinate
 
 ...would make Weather-Legacy a proper weather backbone for modpacks rather than a standalone experience.
+
+
 

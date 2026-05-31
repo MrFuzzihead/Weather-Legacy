@@ -168,7 +168,8 @@ public class StormObject {
     public TornadoHelper tornadoHelper = new TornadoHelper(this);
 
     public Set<ChunkCoordIntPair> doneChunks = new HashSet<ChunkCoordIntPair>();
-    public int updateLCG = (new Random()).nextInt();
+    private final Random rand = new Random();
+    public int updateLCG = rand.nextInt();
 
     public float formingStrength = 0; // for transition from 0 (in clouds) to 1 (touch down)
 
@@ -517,9 +518,12 @@ public class StormObject {
     public void tick() {
         // Weather.dbg("ticking storm " + ID + " - manager: " + manager);
 
-        // adjust posGround to be pos with the ground Y pos for convinient usage
-        posGround = Vec3.createVectorHelper(pos.xCoord, pos.yCoord, pos.zCoord);
+        // adjust posGround to be pos with the ground Y pos for convenient usage
+        // Update in-place to avoid allocating from the shared Vec3 pool every tick,
+        // which would cause the old reference to be overwritten when the pool cycles.
+        posGround.xCoord = pos.xCoord;
         posGround.yCoord = currentTopYBlock;
+        posGround.zCoord = pos.zCoord;
 
         Side side = FMLCommonHandler.instance()
             .getEffectiveSide();
@@ -707,7 +711,6 @@ public class StormObject {
     }
 
     public void tickWeatherEvents() {
-        Random rand = new Random();
         World world = manager.getWorld();
 
         // patch for worlds that are crashing due to storms that havent been removed since packet optimization bug
@@ -1098,7 +1101,6 @@ public class StormObject {
 
             boolean performBuildup = false;
 
-            Random rand = new Random();
 
             if (!isPrecipitating() && rand.nextInt(randomChanceOfWaterBuildFromNothing) == 0) {
                 performBuildup = true;
@@ -2069,7 +2071,6 @@ public class StormObject {
         StormObject entity = this;
         WeatherEntityConfig conf = getWeatherEntityConfigForStorm();// WeatherTypes.weatherEntTypes.get(curWeatherType);
 
-        Random rand = new Random();
 
         /*
          * if (entity instanceof EntTornado) {
@@ -2105,7 +2106,7 @@ public class StormObject {
         for (; f1 >= 180F; f1 -= 360F) {}
 
         double distY = entity.pos.yCoord - entity1.posY;
-        double distXZ = Math.sqrt(Math.abs(d1)) + Math.sqrt(Math.abs(d2));
+        double distXZ = Math.sqrt(d1 * d1 + d2 * d2);
 
         if (entity1.posY - entity.pos.yCoord < 0.0D) {
             distY = 1.0D;
@@ -2307,7 +2308,6 @@ public class StormObject {
     @SideOnly(Side.CLIENT)
     public EntityRotFX spawnFogParticle(double x, double y, double z, int parRenderOrder) {
         double speed = 0D;
-        Random rand = new Random();
         EntityRotFX entityfx = particleBehaviorFog.spawnNewParticleIconFX(
             Minecraft.getMinecraft().theWorld,
             ParticleRegistry.cloud256,
@@ -2429,7 +2429,9 @@ public class StormObject {
     public void addWeatherEffectLightning(EntityLightningBolt parEnt) {
         // manager.getWorld().addWeatherEffect(parEnt);
         manager.getWorld().weatherEffects.add(parEnt);
-        ((WeatherManagerServer) manager).syncLightningNew(parEnt);
+        if (!manager.getWorld().isRemote) {
+            ((WeatherManagerServer) manager).syncLightningNew(parEnt);
+        }
     }
 
     // notes moved to bottom\\

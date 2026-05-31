@@ -58,7 +58,7 @@ public class ConfigMisc implements IConfigCategory {
     // public static boolean Storm_Tornado_GrabCond_List_TrimSpaces = true;
     @ConfigComment("Treat block grab list as a blacklist instead of whitelist")
     public static boolean Storm_Tornado_GrabListBlacklistMode = false;
-    public static String Storm_Tornado_GrabList = "planks, leaves";
+    public static String Storm_Tornado_GrabList = "planks,leaves";
     public static int Storm_Tornado_maxBlocksPerStorm = 200;
     public static int Storm_Tornado_maxBlocksGrabbedPerTick = 5;
     @ConfigComment("How rarely a block will be removed while spinning around a tornado")

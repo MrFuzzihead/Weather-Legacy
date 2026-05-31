@@ -37,6 +37,8 @@ public class WindManager {
 
     public WeatherManagerBase manager;
 
+    private final Random rand = new Random();
+
     // global
     public float windAngleGlobal = 0;
     public float windSpeedGlobal = 0;
@@ -71,7 +73,6 @@ public class WindManager {
     public WindManager(WeatherManagerBase parManager) {
         manager = parManager;
 
-        Random rand = new Random();
 
         windAngleGlobal = rand.nextInt(360);
     }
@@ -146,7 +147,6 @@ public class WindManager {
 
     public void tick() {
 
-        Random rand = new Random();
 
         // debug
         // Weather.dbg("wind angle: " + windAngleGlobal);
@@ -246,7 +246,7 @@ public class WindManager {
                 }
 
                 // global wind angle
-                windAngleGlobal += ((new Random()).nextInt(5) - 2) * 0.5F;
+                windAngleGlobal += (rand.nextInt(5) - 2) * 0.5F;
 
                 if (windAngleGlobal < -180) {
                     windAngleGlobal += 360;
