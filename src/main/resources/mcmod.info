@@ -1,16 +1,20 @@
 [
-{
-  "modid": "weather2",
-  "name": "Localized Weather & Storms",
-  "description": "Localized rain and storms that evolve into deadly tornadoes and others, also some ambience effects",
-  "version": "${version}",
-  "mcversion": "${mcversion}",
-  "url": "http://Coros.us/",
-  "updateUrl": "",
-  "authorList": ["Corosus"],
-  "credits": "",
-  "logoFile": "",
-  "screenshots": [],
-  "dependencies": []
-}
+  {
+    "modid" : "${modId}",
+    "name" : "${modName}",
+    "version" : "${modVersion}",
+    "mcversion" : "${minecraftVersion}",
+    "url" : "https://github.com/MrFuzzihead/Weather-Legacy",
+    "credits" : "Created by Corosauce",
+    "authors" : [
+      "Corosauce",
+      "MrFuzzihead"
+    ],
+    "description" : "Localized rain and storms that evolve into deadly tornadoes and others, also some ambience effects",
+    "logoFile" : "",
+    "updateUrl" : "https://github.com/MrFuzzihead/Weather-Legacy/releases/latest",
+    "parent" : "",
+    "screenshots": [
+    ]
+  }
 ]

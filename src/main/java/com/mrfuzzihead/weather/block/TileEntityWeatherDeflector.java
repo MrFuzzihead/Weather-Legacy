@@ -1,0 +1,53 @@
+package com.mrfuzzihead.weather.block;
+
+import java.util.List;
+
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.Vec3;
+
+import com.mrfuzzihead.weather.ServerTickHandler;
+import com.mrfuzzihead.weather.weathersystem.WeatherManagerServer;
+import com.mrfuzzihead.weather.weathersystem.storm.StormObject;
+
+public class TileEntityWeatherDeflector extends TileEntity {
+
+    public int deflectorRadius = 150;
+
+    public void updateEntity() {
+
+        if (!worldObj.isRemote) {
+
+            if (worldObj.getTotalWorldTime() % 100 == 0) {
+                WeatherManagerServer wm = ServerTickHandler.lookupDimToWeatherMan.get(worldObj.provider.dimensionId);
+                if (wm != null) {
+                    // StormObject lastTickStormObject = wm.getClosestStorm(Vec3.createVectorHelper(xCoord,
+                    // StormObject.layers.get(0), zCoord), deflectorRadius, StormObject.STATE_NORMAL, true);
+
+                    List<StormObject> storms = wm.getStormsAround(
+                        Vec3.createVectorHelper(xCoord, StormObject.layers.get(0), zCoord),
+                        deflectorRadius);
+
+                    for (int i = 0; i < storms.size(); i++) {
+                        StormObject storm = storms.get(i);
+
+                        if (storm != null) {
+                            wm.removeStormObject(storm.ID);
+                            wm.syncStormRemove(storm);
+                        }
+                    }
+
+                }
+            }
+        }
+    }
+
+    public void writeToNBT(NBTTagCompound var1) {
+        super.writeToNBT(var1);
+    }
+
+    public void readFromNBT(NBTTagCompound var1) {
+        super.readFromNBT(var1);
+
+    }
+}
