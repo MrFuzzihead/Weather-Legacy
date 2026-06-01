@@ -1,17 +1,12 @@
 package com.mrfuzzihead.weather.block;
 
-import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.Vec3;
 
-import com.mrfuzzihead.weather.ClientTickHandler;
 import com.mrfuzzihead.weather.Weather;
-import com.mrfuzzihead.weather.config.ConfigMisc;
 import com.mrfuzzihead.weather.util.WeatherUtilSound;
-import com.mrfuzzihead.weather.weathersystem.storm.StormObject;
 
-import cpw.mods.fml.client.FMLClientHandler;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 
@@ -33,7 +28,8 @@ public class TileEntityTSiren extends TileEntity {
         // Only play when driven by a redstone signal.
         // Redstone wire/lever power levels are part of block metadata,
         // which is always synced server→client, so this check is safe client-side.
-        if (!worldObj.isBlockIndirectlyGettingPowered(xCoord, yCoord, zCoord) || this.lastPlayTime > System.currentTimeMillis()) {
+        if (!worldObj.isBlockIndirectlyGettingPowered(xCoord, yCoord, zCoord)
+            || this.lastPlayTime > System.currentTimeMillis()) {
             return;
         }
 

@@ -74,10 +74,7 @@
   "streaming.siren": {
     "category": "record",
     "sounds": [
-      {
-        "name": "streaming/siren",
-        "stream": true
-      }
+      "streaming/siren"
     ]
   },
   "streaming.wind_close": {
