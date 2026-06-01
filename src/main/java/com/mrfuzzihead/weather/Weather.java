@@ -97,10 +97,11 @@ public class Weather {
     }
 
     public static void writeOutData(boolean unloadInstances) {
-        // write out overworld only, because only dim with volcanoes planned
         try {
-            WeatherManagerServer wm = ServerTickHandler.lookupDimToWeatherMan.get(0);
-            if (wm != null) {
+            // Save all registered dimension managers, not just dim 0.
+            // Non-overworld storm data was previously silently discarded on
+            // every save cycle and at shutdown.
+            for (WeatherManagerServer wm : ServerTickHandler.lookupDimToWeatherMan.values()) {
                 wm.writeToFile();
             }
             PlayerData.writeAllPlayerNBT(unloadInstances);

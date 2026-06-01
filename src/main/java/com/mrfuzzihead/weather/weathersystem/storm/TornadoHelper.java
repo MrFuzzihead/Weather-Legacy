@@ -31,6 +31,8 @@ public class TornadoHelper {
 
     public StormObject storm;
 
+    private final Random rand = new Random();
+
     public int blockCount = 0;
 
     public int ripCount = 0;
@@ -52,18 +54,22 @@ public class TornadoHelper {
 
     public int getTornadoBaseSize() {
         int sizeChange = 10;
-        if (storm.levelCurIntensityStage >= StormObject.STATE_STAGE5) {
-            return sizeChange * 9;
+        if (storm.levelCurIntensityStage >= StormObject.STATE_STAGE7) {
+            return sizeChange * 11; // F6
+        } else if (storm.levelCurIntensityStage >= StormObject.STATE_STAGE6) {
+            return sizeChange * 9; // F5
+        } else if (storm.levelCurIntensityStage >= StormObject.STATE_STAGE5) {
+            return sizeChange * 7; // F4
         } else if (storm.levelCurIntensityStage >= StormObject.STATE_STAGE4) {
-            return sizeChange * 7;
+            return sizeChange * 5; // F3
         } else if (storm.levelCurIntensityStage >= StormObject.STATE_STAGE3) {
-            return sizeChange * 5;
+            return sizeChange * 4; // F2
         } else if (storm.levelCurIntensityStage >= StormObject.STATE_STAGE2) {
-            return sizeChange * 4;
+            return sizeChange * 3; // F1
         } else if (storm.levelCurIntensityStage >= StormObject.STATE_STAGE1) {
-            return sizeChange * 3;
+            return sizeChange * 2; // F0
         } else if (storm.levelCurIntensityStage >= StormObject.STATE_FORMING) {
-            return sizeChange * 1;
+            return sizeChange * 1; // forming
         } else {
             return 5;
         }
@@ -97,8 +103,6 @@ public class TornadoHelper {
          */
 
         forceRotate(parWorld);
-
-        Random rand = new Random();
 
         // confirm this is correct, changing to formation use!
         // int spawnYOffset = (int) storm.currentTopYBlock;
@@ -299,6 +303,17 @@ public class TornadoHelper {
             int what = 0;
         }
 
+        // If no player is within range, skip the rip entirely.
+        // Without a nearby player we cannot spawn an EntityMovingBlock, and removing
+        // the block from the world without an entity to replace it would permanently
+        // destroy the block.
+        boolean playerClose = parWorld.getClosestPlayer(
+            storm.posBaseFormationPos.xCoord,
+            storm.posBaseFormationPos.yCoord,
+            storm.posBaseFormationPos.zCoord,
+            140) != null;
+        if (!playerClose) return false;
+
         boolean seesLight = false;
         Block blockID = parWorld.getBlock(tryX, tryY, tryZ);
 
@@ -321,8 +336,11 @@ public class TornadoHelper {
          */
         ) {
 
+            // Bug fix: was checking storm.pos / 16 (always loaded), must check the
+            // target block's chunk. Also use >> 4 instead of / 16 so that negative
+            // block coordinates near 0 map to the correct (negative) chunk index.
             if (parWorld.getChunkProvider()
-                .chunkExists((int) storm.pos.xCoord / 16, (int) storm.pos.zCoord / 16)
+                .chunkExists(tryX >> 4, tryZ >> 4)
                 && /* mod_EntMover.getFPS() > mod_EntMover.safetyCutOffFPS && */blockCount
                     <= ConfigMisc.Storm_Tornado_maxBlocksPerStorm
                 && lastGrabTime < System.currentTimeMillis()
@@ -335,42 +353,36 @@ public class TornadoHelper {
                 if (blockID != Blocks.snow && blockID != Blocks.glass) {
                     EntityMovingBlock mBlock;
 
-                    if (parWorld.getClosestPlayer(
-                        storm.posBaseFormationPos.xCoord,
-                        storm.posBaseFormationPos.yCoord,
-                        storm.posBaseFormationPos.zCoord,
-                        140) != null) {
-                        if (blockID == Blocks.grass) {
-                            mBlock = new EntityMovingBlock(parWorld, tryX, tryY, tryZ, Blocks.dirt, storm);
-                        } else {
-                            mBlock = new EntityMovingBlock(parWorld, tryX, tryY, tryZ, blockID, storm);
-                        }
-
-                        blockCount++;
-
-                        // if (WeatherMod.debug && parWorld.getWorldTime() % 60 == 0) System.out.println("ripping,
-                        // count: " + WeatherMod.blockCount);
-
-                        mBlock.setPosition(tryX, tryY, tryZ);
-
-                        if (!parWorld.isRemote) {
-                            parWorld.spawnEntityInWorld(mBlock);
-                        }
-
-                        // this.activeBlocks.add(mBlock);
-                        tickGrabCount++;
-                        ripCount++;
-
-                        if (ripCount % 10 == 0) {
-                            // System.out.println(ripCount);
-                        } else {
-                            // System.out.print(ripCount + " - ");
-                        }
-
-                        // mBlock.controller = this;
-                        mBlock.type = 0;
-                        seesLight = true;
+                    if (blockID == Blocks.grass) {
+                        mBlock = new EntityMovingBlock(parWorld, tryX, tryY, tryZ, Blocks.dirt, storm);
+                    } else {
+                        mBlock = new EntityMovingBlock(parWorld, tryX, tryY, tryZ, blockID, storm);
                     }
+
+                    blockCount++;
+
+                    // if (WeatherMod.debug && parWorld.getWorldTime() % 60 == 0) System.out.println("ripping, count: "
+                    // + WeatherMod.blockCount);
+
+                    mBlock.setPosition(tryX, tryY, tryZ);
+
+                    if (!parWorld.isRemote) {
+                        parWorld.spawnEntityInWorld(mBlock);
+                    }
+
+                    // this.activeBlocks.add(mBlock);
+                    tickGrabCount++;
+                    ripCount++;
+
+                    if (ripCount % 10 == 0) {
+                        // System.out.println(ripCount);
+                    } else {
+                        // System.out.print(ripCount + " - ");
+                    }
+
+                    // mBlock.controller = this;
+                    mBlock.type = 0;
+                    seesLight = true;
 
                 } else {
                     // depreciated - OR NOT!
@@ -642,8 +654,6 @@ public class TornadoHelper {
 
     public boolean tryPlaySound(String[] sound, int arrIndex, Entity source, float vol, float parCutOffRange) {
         Entity soundTarget = source;
-
-        Random rand = new Random();
 
         // should i?
         // soundTarget = this;

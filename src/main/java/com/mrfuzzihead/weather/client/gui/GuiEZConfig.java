@@ -250,7 +250,7 @@ public class GuiEZConfig extends GuiScreen {
                 16777215);
             this.drawString(
                 this.fontRendererObj,
-                "Tornados and Cyclones",
+                "Tornadoes and Cyclones",
                 xStart + 7,
                 yStart2 + 8 + yEleSize * 4,
                 16777215);

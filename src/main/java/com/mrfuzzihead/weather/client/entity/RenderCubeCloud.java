@@ -53,6 +53,14 @@ public class RenderCubeCloud extends Render {
 
         GL11.glTranslatef((float) (var2 - entP.posX), (float) (var4 - entP.posY), (float) (var6 - entP.posZ));
 
+        if (RenderManager.instance == null || RenderManager.instance.renderEngine == null) {
+            GL11.glPopMatrix();
+            return;
+        }
+        if (parStorm.manager == null) {
+            GL11.glPopMatrix();
+            return;
+        }
         RenderManager.instance.renderEngine.bindTexture(TextureMap.locationBlocksTexture);
         // this.loadTexture("/terrain.png");
         World var11 = parStorm.manager.getWorld();

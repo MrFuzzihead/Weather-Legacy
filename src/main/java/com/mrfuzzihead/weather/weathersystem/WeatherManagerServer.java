@@ -1,6 +1,8 @@
 package com.mrfuzzihead.weather.weathersystem;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Random;
 import java.util.Set;
 
@@ -30,10 +32,12 @@ public class WeatherManagerServer extends WeatherManagerBase {
 
     public int syncRange = 256;
 
+    private final Random rand = new Random();
+
     private int tickerSyncWeatherCheckVanilla = 0;
     private int tickerSyncWeatherLowWind = 0;
     private int tickerSyncWeatherHighWind = 0;
-    private int tickerSyncVolcanos = 0;
+    private int tickerSyncVolcanoes = 0;
     private int tickerSyncWindAndIMC = 0;
     private int tickerSyncStormSpawnOrRemoveChecks = 0;
 
@@ -53,7 +57,7 @@ public class WeatherManagerServer extends WeatherManagerBase {
         tickerSyncWeatherCheckVanilla++;
         tickerSyncWeatherLowWind++;
         tickerSyncWeatherHighWind++;
-        tickerSyncVolcanos++;
+        tickerSyncVolcanoes++;
         tickerSyncWindAndIMC++;
         tickerSyncStormSpawnOrRemoveChecks++;
 
@@ -80,15 +84,18 @@ public class WeatherManagerServer extends WeatherManagerBase {
                     .setThundering(false);
             }
 
-            // if (ConfigMisc.overcastMode) {
             if (tickerSyncWeatherCheckVanilla == ConfigMisc.tickerRateSyncWeatherCheckVanilla) {
+                // Always update the server-side flag; StormObject uses it for sky brightness.
                 isVanillaRainActiveOnServer = getWorld().isRaining();
-                syncWeatherVanilla();
+                // Only broadcast to clients in overcast mode — in localized mode the client
+                // ignores this field and vanilla rain is force-suppressed server-side anyway.
+                if (ConfigMisc.overcastMode) {
+                    syncWeatherVanilla();
+                }
                 tickerSyncWeatherCheckVanilla = 0;
                 // Weather.dbg("for dim: " + world.provider.dimensionId + " - is server dimension raining?: " +
                 // world.isRaining() + " time: " + world.getWorldInfo().getRainTime());
             }
-            // }
 
             // sync storms
 
@@ -117,9 +124,9 @@ public class WeatherManagerServer extends WeatherManagerBase {
                 if (stormObjectsData.size() > 0) syncStormUpdate(stormObjectsData);
             }
 
-            // sync volcanos
-            if (tickerSyncVolcanos == ConfigMisc.tickerRateSyncVolcanos) {
-                tickerSyncVolcanos = 0;
+            // sync volcanoes
+            if (tickerSyncVolcanoes == ConfigMisc.tickerRateSyncVolcanoes) {
+                tickerSyncVolcanoes = 0;
                 for (int i = 0; i < getVolcanoObjects().size(); i++) {
                     syncVolcanoUpdate(getVolcanoObjects().get(i));
                 }
@@ -139,6 +146,11 @@ public class WeatherManagerServer extends WeatherManagerBase {
             if (WeatherUtilConfig.listDimensionsClouds.contains(world.provider.dimensionId)
                 && (tickerSyncStormSpawnOrRemoveChecks == ConfigMisc.tickerRateSyncStormSpawnOrRemoveChecks)) {
                 tickerSyncStormSpawnOrRemoveChecks = 0;
+
+                // Collect storms to cull into a separate list and remove after iteration.
+                // Removing inside the loop shifts subsequent elements left, causing every
+                // other consecutive removal to be silently skipped (index-skip bug).
+                List<StormObject> toRemove = new ArrayList<StormObject>();
                 for (int i = 0; i < getStormObjects().size(); i++) {
                     StormObject so = getStormObjects().get(i);
                     EntityPlayer closestPlayer = world.getClosestPlayer(
@@ -149,12 +161,19 @@ public class WeatherManagerServer extends WeatherManagerBase {
 
                     // isDead check is done in WeatherManagerBase
                     if (closestPlayer == null) {
-                        removeStormObject(so.ID);
-                        syncStormRemove(so);
+                        // Only cull harmless storms (below STATE_HIGHWIND) when no player is nearby.
+                        // Dangerous storms (high wind, hail, tornado) are left to decay naturally
+                        // via tickProgression() so they do not vanish the instant a player leaves
+                        // the simBoxRadiusCutoff radius.
+                        if (so.levelCurIntensityStage < StormObject.STATE_HIGHWIND) {
+                            toRemove.add(so);
+                        }
                     }
                 }
-
-                Random rand = new Random();
+                for (StormObject so : toRemove) {
+                    removeStormObject(so.ID);
+                    syncStormRemove(so);
+                }
 
                 // cloud formation spawning - REFINE ME!
                 for (int i = 0; i < world.playerEntities.size(); i++) {
@@ -172,7 +191,7 @@ public class WeatherManagerServer extends WeatherManagerBase {
                         < ConfigMisc.Storm_MaxPerPlayerPerLayer * world.playerEntities.size()) {
                         if (ConfigMisc.Cloud_Layer1_Enable) {
                             if (rand.nextInt(5) == 0) {
-                                // trySpawnNearPlayerForLayer(entP, 1);
+                                trySpawnNearPlayerForLayer(entP, 1);
                             }
                         }
                     }
@@ -182,8 +201,6 @@ public class WeatherManagerServer extends WeatherManagerBase {
     }
 
     public void trySpawnNearPlayerForLayer(EntityPlayer entP, int layer) {
-
-        Random rand = new Random();
 
         int tryCountMax = 10;
         int tryCountCur = 0;
@@ -236,7 +253,7 @@ public class WeatherManagerServer extends WeatherManagerBase {
                 syncStormNew(getStormObjects().get(i), entP);
             }
 
-            // sync volcanos
+            // sync volcanoes
             for (int i = 0; i < getVolcanoObjects().size(); i++) {
                 syncVolcanoNew(getVolcanoObjects().get(i), entP);
             }
@@ -299,7 +316,14 @@ public class WeatherManagerServer extends WeatherManagerBase {
         NBTTagCompound data = new NBTTagCompound();
         data.setString("packetCommand", "WeatherData");
         data.setString("command", "syncStormNew");
-        data.setTag("data", parStorm.nbtSyncForClient());
+        // Use nbtSyncForClientFull() instead of nbtSyncForClient() so that the packet
+        // always contains the complete storm state. nbtSyncForClient() only emits fields
+        // that differ from the server's cachedClientNBTState (delta compression). For a
+        // client that has just connected or reconnected the storm object is brand-new with
+        // an empty cache, so any field absent from the packet silently defaults to 0/false.
+        // nbtSyncForClientFull() bypasses the delta check by temporarily nulling the
+        // server-side cache, forcing every field to be included.
+        data.setTag("data", parStorm.nbtSyncForClientFull());
         if (entP == null) {
             Weather.eventChannel.sendToDimension(
                 PacketHelper.getNBTPacket(data, Weather.eventChannelName),

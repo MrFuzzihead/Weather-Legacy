@@ -34,7 +34,7 @@ public class WeatherManagerBase {
     public HashMap<Integer, ArrayList<StormObject>> lookupStormObjectsByLayer = new HashMap<Integer, ArrayList<StormObject>>();
     // private ArrayList<ArrayList<StormObject>> listStormObjectsByLayer = new ArrayList<ArrayList<StormObject>>();
 
-    // volcanos
+    // volcanoes
     private List<VolcanoObject> listVolcanoes = new ArrayList<VolcanoObject>();
     public HashMap<Long, VolcanoObject> lookupVolcanoes = new HashMap<Long, VolcanoObject>();
 
@@ -95,12 +95,19 @@ public class WeatherManagerBase {
         World world = getWorld();
         if (world != null) {
             // tick storms
+            // Collect storms that need removing into a separate list first, then process
+            // removals after the loop completes. Calling removeStormObject() inside a
+            // forward index-based loop shifts every subsequent element left, causing the
+            // element that fills the removed slot to be silently skipped on the next
+            // iteration. The deferred approach avoids that index-skip bug entirely.
             List<StormObject> list = getStormObjects();
+            List<StormObject> toRemove = new ArrayList<StormObject>();
+            boolean isServer = this instanceof WeatherManagerServer;
             for (int i = 0; i < list.size(); i++) {
                 StormObject so = list.get(i);
-                if (this instanceof WeatherManagerServer && so.isDead) {
-                    removeStormObject(so.ID);
-                    ((WeatherManagerServer) this).syncStormRemove(so);
+                if (isServer && so.isDead) {
+                    // Defer server-side removal + client sync until after the loop.
+                    toRemove.add(so);
                 } else {
 
                     /*
@@ -132,7 +139,8 @@ public class WeatherManagerBase {
                                 "WARNING!!! - detected isDead storm object still in client side list, had to remove storm object with ID "
                                     + so.ID
                                     + " from client side, wasnt properly removed via main channels");
-                            removeStormObject(so.ID);
+                            // Defer client-side removal to after the loop as well.
+                            toRemove.add(so);
                         }
                         // Weather.dbg("client storm is dead and still in list, bug?");
                     }
@@ -140,8 +148,15 @@ public class WeatherManagerBase {
                     // }
                 }
             }
+            // Process all deferred removals now that iteration is complete.
+            for (StormObject so : toRemove) {
+                removeStormObject(so.ID);
+                if (isServer) {
+                    ((WeatherManagerServer) this).syncStormRemove(so);
+                }
+            }
 
-            // tick volcanos
+            // tick volcanoes
             for (int i = 0; i < getVolcanoObjects().size(); i++) {
                 getVolcanoObjects().get(i)
                     .tick();
@@ -306,9 +321,9 @@ public class WeatherManagerBase {
         try {
             // Write out to file
             if (!(new File(saveFolder).exists())) (new File(saveFolder)).mkdirs();
-            FileOutputStream fos = new FileOutputStream(saveFolder + "WeatherData_" + dim + ".dat");
-            CompressedStreamTools.writeCompressed(mainNBT, fos);
-            fos.close();
+            try (FileOutputStream fos = new FileOutputStream(saveFolder + "WeatherData_" + dim + ".dat")) {
+                CompressedStreamTools.writeCompressed(mainNBT, fos);
+            }
         } catch (Exception ex) {
             ex.printStackTrace();
         }
@@ -324,8 +339,9 @@ public class WeatherManagerBase {
 
         try {
             if ((new File(saveFolder + "WeatherData_" + dim + ".dat")).exists()) {
-                rtsNBT = CompressedStreamTools
-                    .readCompressed(new FileInputStream(saveFolder + "WeatherData_" + dim + ".dat"));
+                try (FileInputStream fis = new FileInputStream(saveFolder + "WeatherData_" + dim + ".dat")) {
+                    rtsNBT = CompressedStreamTools.readCompressed(fis);
+                }
             } else {
                 // readFail = true; - first run, no point
             }
@@ -353,8 +369,10 @@ public class WeatherManagerBase {
             try {
                 // auto restore from most recent backup
                 if ((new File(saveFolder + "WeatherData_" + dim + "_BACKUP0.dat")).exists()) {
-                    rtsNBT = CompressedStreamTools
-                        .readCompressed(new FileInputStream(saveFolder + "WeatherData_" + dim + "_BACKUP0.dat"));
+                    try (
+                        FileInputStream fis = new FileInputStream(saveFolder + "WeatherData_" + dim + "_BACKUP0.dat")) {
+                        rtsNBT = CompressedStreamTools.readCompressed(fis);
+                    }
                 } else {
                     System.out.println("WARNING! Failed to find backup file WeatherData_BACKUP0.dat, nothing loaded");
                 }
@@ -366,8 +384,13 @@ public class WeatherManagerBase {
 
         lastStormFormed = rtsNBT.getLong("lastStormFormed");
 
-        VolcanoObject.lastUsedID = rtsNBT.getLong("lastUsedIDVolcano");
-        StormObject.lastUsedStormID = rtsNBT.getLong("lastUsedIDStorm");
+        // Both lastUsedID counters are static (shared across all dimensions).
+        // If we simply overwrite them each time a dimension loads, the last
+        // dimension to load wins — if it had a lower counter than an earlier
+        // one, new storms/volcanoes would receive IDs that collide with objects
+        // already loaded for the earlier dimension. Take the MAX instead.
+        VolcanoObject.lastUsedID = Math.max(VolcanoObject.lastUsedID, rtsNBT.getLong("lastUsedIDVolcano"));
+        StormObject.lastUsedStormID = Math.max(StormObject.lastUsedStormID, rtsNBT.getLong("lastUsedIDStorm"));
 
         NBTTagCompound nbtVolcanoes = rtsNBT.getCompoundTag("volcanoData");
 
@@ -378,7 +401,7 @@ public class WeatherManagerBase {
             String tagName = (String) it.next();
             NBTTagCompound teamData = (NBTTagCompound) nbtVolcanoes.getCompoundTag(tagName);
 
-            VolcanoObject to = new VolcanoObject(ServerTickHandler.lookupDimToWeatherMan.get(0)/*-1, -1, null*/);
+            VolcanoObject to = new VolcanoObject(ServerTickHandler.lookupDimToWeatherMan.get(dim)/*-1, -1, null*/);
             try {
                 to.readFromNBT(teamData);
             } catch (Exception ex) {

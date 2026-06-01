@@ -4,6 +4,8 @@ import net.minecraftforge.client.event.RenderWorldLastEvent;
 import net.minecraftforge.client.event.TextureStitchEvent;
 import net.minecraftforge.event.world.WorldEvent.Save;
 
+import com.mrfuzzihead.weather.weathersystem.WeatherManagerServer;
+
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
@@ -12,7 +14,19 @@ public class EventHandlerForge {
 
     @SubscribeEvent
     public void worldSave(Save event) {
-        Weather.writeOutData(false);
+        // WorldEvent.Save fires separately for every loaded dimension.
+        // Only save the manager for the dimension that triggered this event;
+        // calling writeOutData() here would redundantly write every dimension's
+        // data on each individual dimension save (N² writes with N dimensions).
+        int dim = event.world.provider.dimensionId;
+        WeatherManagerServer wm = ServerTickHandler.lookupDimToWeatherMan.get(dim);
+        if (wm != null) {
+            try {
+                wm.writeToFile();
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        }
     }
 
     @SubscribeEvent

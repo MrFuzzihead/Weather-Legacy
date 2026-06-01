@@ -6,8 +6,10 @@ import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.world.World;
 
 import com.mrfuzzihead.weather.client.SceneEnhancer;
+import com.mrfuzzihead.weather.weathersystem.WeatherManagerServer;
 
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
+import cpw.mods.fml.common.gameevent.PlayerEvent.PlayerChangedDimensionEvent;
 import cpw.mods.fml.common.gameevent.PlayerEvent.PlayerLoggedInEvent;
 import cpw.mods.fml.common.gameevent.TickEvent.ClientTickEvent;
 import cpw.mods.fml.common.gameevent.TickEvent.Phase;
@@ -70,5 +72,18 @@ public class EventHandlerFML {
     @SubscribeEvent
     public void playerLoggedIn(PlayerLoggedInEvent event) {
         ServerTickHandler.playerJoinedServerSyncFull((EntityPlayerMP) event.player);
+    }
+
+    @SubscribeEvent
+    public void playerChangedDimension(PlayerChangedDimensionEvent event) {
+        // When a player travels to a new dimension the client creates a fresh
+        // WeatherManagerClient with no storms. Trigger a full server-to-client
+        // sync so existing storms in the destination dimension are immediately
+        // visible — without this, the player would see no storms until the next
+        // periodic sync tick (up to 40 ticks / 2 seconds for low-intensity ones).
+        WeatherManagerServer wm = ServerTickHandler.lookupDimToWeatherMan.get(event.toDim);
+        if (wm != null) {
+            wm.playerJoinedServerSyncFull((EntityPlayerMP) event.player);
+        }
     }
 }

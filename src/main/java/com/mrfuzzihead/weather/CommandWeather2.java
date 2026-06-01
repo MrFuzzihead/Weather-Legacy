@@ -19,13 +19,13 @@ public class CommandWeather2 extends CommandBase {
 
     @Override
     public String getCommandName() {
-        return "com/mrfuzzihead";
+        return "weather2";
     }
 
     @Override
     public void processCommand(ICommandSender var1, String[] var2) {
 
-        String helpMsgStorm = "Syntax: storm create <rain/thunder/wind/spout/hail/F0/F1/F2/F3/F4/F5/C0/C1/C2/C3/C4/C5/hurricane> <Optional: alwaysProgress>... example: storm create F1 alwaysProgress ... eg2: storm killall";
+        String helpMsgStorm = "Syntax: storm create <rain/thunder/wind/spout/hail/F0/F1/F2/F3/F4/F5/F6/C0/C1/C2/C3/C4/C5/C6/C7> <Optional: alwaysProgress>... example: storm create F1 alwaysProgress ... eg2: storm killall";
 
         try {
             if (var1 instanceof EntityPlayerMP) {
@@ -45,7 +45,7 @@ public class CommandWeather2 extends CommandBase {
 
                             CoroUtil.sendPlayerMsg((EntityPlayerMP) var1, "volcano created");
                         } else {
-                            CoroUtil.sendPlayerMsg((EntityPlayerMP) var1, "can only make volcanos on main overworld");
+                            CoroUtil.sendPlayerMsg((EntityPlayerMP) var1, "can only make volcanoes on main overworld");
                         }
                     }
                 } else if (var2[0].equals("storm")) {
@@ -93,18 +93,20 @@ public class CommandWeather2 extends CommandBase {
                                 so.attrib_waterSpout = true;
                             } else if (var2[2].equalsIgnoreCase("hail")) {
                                 so.levelCurIntensityStage = StormObject.STATE_HAIL;
+                            } else if (var2[2].equalsIgnoreCase("F6")) {
+                                so.levelCurIntensityStage = StormObject.STATE_STAGE7;
                             } else if (var2[2].equalsIgnoreCase("F5")) {
-                                so.levelCurIntensityStage = StormObject.STATE_STAGE5;
+                                so.levelCurIntensityStage = StormObject.STATE_STAGE6;
                             } else if (var2[2].equalsIgnoreCase("F4")) {
-                                so.levelCurIntensityStage = StormObject.STATE_STAGE4;
+                                so.levelCurIntensityStage = StormObject.STATE_STAGE5;
                             } else if (var2[2].equalsIgnoreCase("F3")) {
-                                so.levelCurIntensityStage = StormObject.STATE_STAGE3;
+                                so.levelCurIntensityStage = StormObject.STATE_STAGE4;
                             } else if (var2[2].equalsIgnoreCase("F2")) {
-                                so.levelCurIntensityStage = StormObject.STATE_STAGE2;
+                                so.levelCurIntensityStage = StormObject.STATE_STAGE3;
                             } else if (var2[2].equalsIgnoreCase("F1")) {
-                                so.levelCurIntensityStage = StormObject.STATE_STAGE1;
+                                so.levelCurIntensityStage = StormObject.STATE_STAGE2;
                             } else if (var2[2].equalsIgnoreCase("F0")) {
-                                so.levelCurIntensityStage = StormObject.STATE_FORMING;
+                                so.levelCurIntensityStage = StormObject.STATE_STAGE1;
                             } else if (var2[2].equalsIgnoreCase("C0")) {
                                 so.stormType = StormObject.TYPE_WATER;
                                 so.levelCurIntensityStage = StormObject.STATE_FORMING;
@@ -120,12 +122,15 @@ public class CommandWeather2 extends CommandBase {
                             } else if (var2[2].equalsIgnoreCase("C4")) {
                                 so.stormType = StormObject.TYPE_WATER;
                                 so.levelCurIntensityStage = StormObject.STATE_STAGE4;
-                            } else if (var2[2].equalsIgnoreCase("C5") || var2[2].equalsIgnoreCase("hurricane")) {
+                            } else if (var2[2].equalsIgnoreCase("C5")) {
                                 so.stormType = StormObject.TYPE_WATER;
                                 so.levelCurIntensityStage = StormObject.STATE_STAGE5;
-                            } else if (var2[2].equalsIgnoreCase("hurricane")) {
+                            } else if (var2[2].equalsIgnoreCase("C6")) {
                                 so.stormType = StormObject.TYPE_WATER;
-                                so.levelCurIntensityStage = StormObject.STATE_STAGE5;
+                                so.levelCurIntensityStage = StormObject.STATE_STAGE6;
+                            } else if (var2[2].equalsIgnoreCase("C7") || var2[2].equalsIgnoreCase("hurricane")) {
+                                so.stormType = StormObject.TYPE_WATER;
+                                so.levelCurIntensityStage = StormObject.STATE_STAGE7;
                             } else if (var2[2].equalsIgnoreCase("full")) {
                                 // needs code to somehow guarantee it will build to max stage
                                 so.levelCurIntensityStage = StormObject.STATE_THUNDER;

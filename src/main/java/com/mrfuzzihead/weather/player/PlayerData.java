@@ -39,7 +39,9 @@ public class PlayerData {
                 + ".dat";
 
             if ((new File(fileURL)).exists()) {
-                playerData = CompressedStreamTools.readCompressed(new FileInputStream(fileURL));
+                try (FileInputStream fis = new FileInputStream(fileURL)) {
+                    playerData = CompressedStreamTools.readCompressed(fis);
+                }
             }
         } catch (Exception ex) {
             // Weather.dbg("no saved data found for " + username);
@@ -77,10 +79,8 @@ public class PlayerData {
             + username
             + ".dat";
 
-        try {
-            FileOutputStream fos = new FileOutputStream(fileURL);
+        try (FileOutputStream fos = new FileOutputStream(fileURL)) {
             CompressedStreamTools.writeCompressed(parData, fos);
-            fos.close();
         } catch (Exception ex) {
             ex.printStackTrace();
             Weather.dbg("Error writing Weather2 player data for " + username);

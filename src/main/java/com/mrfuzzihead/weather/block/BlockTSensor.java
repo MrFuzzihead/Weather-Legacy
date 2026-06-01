@@ -1,11 +1,11 @@
 package com.mrfuzzihead.weather.block;
 
+import java.util.List;
 import java.util.Random;
 
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.util.Vec3;
 import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
 
@@ -16,7 +16,7 @@ import com.mrfuzzihead.weather.weathersystem.storm.StormObject;
 
 public class BlockTSensor extends Block {
 
-    public BlockTSensor(int var1) {
+    public BlockTSensor() {
         super(Material.clay);
         this.setTickRandomly(true);
     }
@@ -31,32 +31,50 @@ public class BlockTSensor extends Block {
     }
 
     @Override
+    public void onBlockAdded(World var1, int var2, int var3, int var4) {
+        // Schedule the first detection tick immediately so the sensor begins
+        // checking as soon as it is placed, instead of waiting for a random tick
+        // which can take ~60+ seconds to fire.
+        if (!var1.isRemote) {
+            var1.scheduleBlockUpdate(var2, var3, var4, this, this.tickRate(var1));
+        }
+    }
+
+    @Override
     public void updateTick(World var1, int var2, int var3, int var4, Random var5) {
 
         if (var1.isRemote) return;
-
-        // var1.getBlockMetadata(var2, var3, var4);
-        // List var7 = var1.getEntitiesWithinAABB(EntTornado.class, AxisAlignedBB.getBoundingBoxFromPool((double)var2,
-        // (double)var3, (double)var4, (double)var2 + 1.0D, (double)var3 + 1.0D, (double)var4 + 1.0D).expand(140.0D,
-        // 140.0D, 140.0D));
 
         boolean enable = false;
 
         WeatherManagerServer wms = ServerTickHandler.lookupDimToWeatherMan.get(var1.provider.dimensionId);
         if (wms != null) {
-            StormObject so = wms.getClosestStorm(
-                Vec3.createVectorHelper(var2, var3, var4),
-                ConfigMisc.sensorActivateDistance,
-                StormObject.STATE_FORMING);
-            if (so != null/* && so.attrib_tornado_severity > 0 */) {
-                enable = true;
+            // Iterate storm objects directly and use XZ-only distance against posGround.
+            // The old getClosestStorm() used storm.pos (cloud altitude ~200 blocks up) for
+            // the 3D euclidean distance, which inflated the distance by the sensor's Y gap
+            // and silently shrank the effective horizontal detection radius.
+            List<StormObject> storms = wms.getStormObjects();
+            for (int i = 0; i < storms.size(); i++) {
+                StormObject so = storms.get(i);
+                if (so.isDead) continue;
+                if (so.levelCurIntensityStage < StormObject.STATE_FORMING) continue;
+                double dx = so.posGround.xCoord - var2;
+                double dz = so.posGround.zCoord - var4;
+                if (Math.sqrt(dx * dx + dz * dz) <= ConfigMisc.sensorActivateDistance) {
+                    enable = true;
+                    break;
+                }
             }
         }
 
+        // flags = 3 (0x1 | 0x2): notify neighbours (server-side redstone) AND send
+        // a block-data packet to clients so their metadata stays in sync.
+        // The old flags=2 skipped the client update, leaving client metadata at 0
+        // and causing client-side power queries to always read 0.
         if (enable) {
-            var1.setBlockMetadataWithNotify(var2, var3, var4, 15, 2);
+            var1.setBlockMetadataWithNotify(var2, var3, var4, 15, 3);
         } else {
-            var1.setBlockMetadataWithNotify(var2, var3, var4, 0, 2);
+            var1.setBlockMetadataWithNotify(var2, var3, var4, 0, 3);
         }
 
         /*

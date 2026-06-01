@@ -50,22 +50,28 @@ public class TileEntityWeatherForecastRenderer extends TileEntitySpecialRenderer
                 progression = "Dying ";
             }
 
-            if (so.levelCurIntensityStage >= StormObject.STATE_STAGE5 + 1) {
+            if (so.levelCurIntensityStage >= StormObject.STATE_STAGE7 + 1) {
                 descSeverity = "????";
-            } else if (so.levelCurIntensityStage >= StormObject.STATE_STAGE5) {
+            } else if (so.levelCurIntensityStage >= StormObject.STATE_STAGE7) {
+                descSeverity = "F6 Tornado";
+                if (so.stormType == StormObject.TYPE_WATER) descSeverity = "Super Hurricane";
+            } else if (so.levelCurIntensityStage >= StormObject.STATE_STAGE6) {
                 descSeverity = "F5 Tornado";
                 if (so.stormType == StormObject.TYPE_WATER) descSeverity = "Hurricane";
-            } else if (so.levelCurIntensityStage >= StormObject.STATE_STAGE4) {
+            } else if (so.levelCurIntensityStage >= StormObject.STATE_STAGE5) {
                 descSeverity = "F4 Tornado";
+                if (so.stormType == StormObject.TYPE_WATER) descSeverity = "Tropical Cyclone Stage 5";
+            } else if (so.levelCurIntensityStage >= StormObject.STATE_STAGE4) {
+                descSeverity = "F3 Tornado";
                 if (so.stormType == StormObject.TYPE_WATER) descSeverity = "Tropical Cyclone Stage 4";
             } else if (so.levelCurIntensityStage >= StormObject.STATE_STAGE3) {
-                descSeverity = "F3 Tornado";
+                descSeverity = "F2 Tornado";
                 if (so.stormType == StormObject.TYPE_WATER) descSeverity = "Tropical Cyclone Stage 3";
             } else if (so.levelCurIntensityStage >= StormObject.STATE_STAGE2) {
-                descSeverity = "F2 Tornado";
+                descSeverity = "F1 Tornado";
                 if (so.stormType == StormObject.TYPE_WATER) descSeverity = "Tropical Cyclone Stage 2";
             } else if (so.levelCurIntensityStage >= StormObject.STATE_STAGE1) {
-                descSeverity = "F1 Tornado";
+                descSeverity = "F0 Tornado";
                 if (so.stormType == StormObject.TYPE_WATER) descSeverity = "Tropical Cyclone Stage 1";
             } else if (so.levelCurIntensityStage >= StormObject.STATE_FORMING) {
                 descSeverity = "Sign of Tornado";
@@ -206,7 +212,11 @@ public class TileEntityWeatherForecastRenderer extends TileEntitySpecialRenderer
                         RenderManager.instance.playerViewY,
                         ClientProxy.radarIconTornado);
                     renderLivingLabel(
-                        "F" + (int) (storm.levelCurIntensityStage - StormObject.levelStormIntensityFormingStartVal),
+                        // FORMING stage (pre-touchdown funnel) is below STATE_STAGE1, so subtracting
+                        // STATE_STAGE1 would give a negative number (e.g. "F-1"). Show "F?" instead.
+                        storm.levelCurIntensityStage >= StormObject.STATE_STAGE1
+                            ? "F" + (storm.levelCurIntensityStage - StormObject.STATE_STAGE1)
+                            : "F?",
                         x,
                         y + 1.5F,
                         z,

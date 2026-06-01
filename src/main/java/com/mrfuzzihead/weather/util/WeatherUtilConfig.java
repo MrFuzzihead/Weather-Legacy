@@ -305,7 +305,7 @@ public class WeatherUtilConfig {
             }
 
             if (nbtServerData.hasKey("btn_" + CMD_BTN_PREF_TORNADOANDCYCLONES)) {
-                ConfigMisc.Storm_NoTornadosOrCyclones = LIST_TOGGLE
+                ConfigMisc.Storm_NoTornadoesOrCyclones = LIST_TOGGLE
                     .get(nbtServerData.getInteger("btn_" + CMD_BTN_PREF_TORNADOANDCYCLONES))
                     .equalsIgnoreCase("off");
             }
