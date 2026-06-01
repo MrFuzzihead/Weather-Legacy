@@ -21,7 +21,6 @@ import com.mrfuzzihead.weather.block.TileEntityWeatherDeflector;
 import com.mrfuzzihead.weather.block.TileEntityWeatherForecast;
 import com.mrfuzzihead.weather.block.TileEntityWeatherMachine;
 import com.mrfuzzihead.weather.block.TileEntityWindVane;
-import com.mrfuzzihead.weather.config.ConfigMisc;
 import com.mrfuzzihead.weather.entity.EntityIceBall;
 import com.mrfuzzihead.weather.entity.EntityLightningBolt;
 import com.mrfuzzihead.weather.entity.EntityMovingBlock;
@@ -59,37 +58,25 @@ public class CommonProxy implements IGuiHandler {
         addMapping(EntityMovingBlock.class, "Moving Block", 1, 128, 5, true);
         addMapping(EntityLightningBolt.class, "Weather2 Lightning Bolt", 2, 512, 5, true);
 
-        addBlock(blockTSensor = (new BlockTSensor(ConfigMisc.Block_sensorID)), "TornadoSensor", "Tornado Sensor");
+        addBlock(blockTSensor = new BlockTSensor(), "TornadoSensor", "Tornado Sensor");
+        addBlock(blockTSiren = new BlockTSiren(), TileEntityTSiren.class, "TornadoSiren", "Tornado Siren");
+        addBlock(blockWindVane = new BlockWindVane(), TileEntityWindVane.class, "WindVane", "Wind Vane");
         addBlock(
-            blockTSiren = (new BlockTSiren(ConfigMisc.Block_sirenID)),
-            TileEntityTSiren.class,
-            "TornadoSiren",
-            "Tornado Siren");
-        addBlock(
-            blockWindVane = (new BlockWindVane(ConfigMisc.Block_windVaneID)),
-            TileEntityWindVane.class,
-            "WindVane",
-            "Wind Vane");
-        addBlock(
-            blockWeatherForecast = (new BlockWeatherForecast(ConfigMisc.Block_weatherForecastID)),
+            blockWeatherForecast = new BlockWeatherForecast(),
             TileEntityWeatherForecast.class,
             "WeatherForecast",
             "Weather Forecast");
         addBlock(
-            blockWeatherMachine = (new BlockWeatherMachine(ConfigMisc.Block_weatherMachineID)),
+            blockWeatherMachine = new BlockWeatherMachine(),
             TileEntityWeatherMachine.class,
             "WeatherMachine",
             "Weather Machine (right click to cycle)");
         addBlock(
-            blockWeatherDeflector = (new BlockWeatherDeflector(ConfigMisc.Block_weatherDeflectorID)),
+            blockWeatherDeflector = new BlockWeatherDeflector(),
             TileEntityWeatherDeflector.class,
             "WeatherDeflector",
             "Weather Deflector");
-        addBlock(
-            blockAnemometer = (new BlockAnemometer(ConfigMisc.Block_anemometer)),
-            TileEntityAnemometer.class,
-            "Anemometer",
-            "Anemometer");
+        addBlock(blockAnemometer = new BlockAnemometer(), TileEntityAnemometer.class, "Anemometer", "Anemometer");
 
         GameRegistry.addRecipe(
             new ItemStack(blockTSensor, 1),

@@ -25,9 +25,6 @@ import extendedrenderer.particle.entity.EntityRotFX;
 
 public class WeatherUtilEntity {
 
-    // old non multiplayer friendly var, needs resdesign where this is used
-    public static int playerInAirTime = 0;
-
     public static float getWeight(Entity entity1) {
         return getWeight(entity1, false);
     }
@@ -48,12 +45,18 @@ public class WeatherUtilEntity {
         }
 
         if (entity1 instanceof EntityPlayer) {
+            // Per-entity air-time counter stored in NBT so that each player in
+            // a multiplayer game has an independent value (fixes the old static
+            // playerInAirTime field which was shared across all players).
+            int airTime = entity1.getEntityData()
+                .getInteger("timeInAir");
             if (entity1.onGround || entity1.handleWaterMovement()) {
-                playerInAirTime = 0;
+                airTime = 0;
             } else {
-                // System.out.println(playerInAirTime);
-                playerInAirTime++;
+                airTime++;
             }
+            entity1.getEntityData()
+                .setInteger("timeInAir", airTime);
 
             if (((EntityPlayer) entity1).capabilities.isCreativeMode) return 99999999F;
 
@@ -72,9 +75,9 @@ public class WeatherUtilEntity {
             }
 
             if (forTornado) {
-                return 4.5F + extraWeight + ((float) (playerInAirTime / 400));
+                return 4.5F + extraWeight + ((float) (airTime / 400));
             } else {
-                return 5.0F + extraWeight + ((float) (playerInAirTime / 400));
+                return 5.0F + extraWeight + ((float) (airTime / 400));
             }
         }
 

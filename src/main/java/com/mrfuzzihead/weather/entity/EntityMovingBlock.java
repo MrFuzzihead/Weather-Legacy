@@ -46,6 +46,11 @@ public class EntityMovingBlock extends Entity implements IEntityAdditionalSpawnD
     public StormObject owner;
     public int gravityDelay;
 
+    /** Block coordinates from which this block was originally ripped by the tornado. */
+    public int originalX;
+    public int originalY;
+    public int originalZ;
+
     public EntityMovingBlock(World var1) {
         super(var1);
         this.mode = 1;
@@ -77,11 +82,15 @@ public class EntityMovingBlock extends Entity implements IEntityAdditionalSpawnD
         this.tileentity = var1.getTileEntity(var2, var3, var4);
         this.metadata = var1.getBlockMetadata(var2, var3, var4);
 
+        // Record the original rip position so the block can be returned there if
+        // the player moves out of range before the block lands naturally.
+        this.originalX = var2;
+        this.originalY = var3;
+        this.originalZ = var4;
+
         owner = parOwner;
 
         if (this.tileentity != null) {
-            // var1.setBlockTileEntity(var2, var3, var4,
-            // ((BlockContainer)Block.blocksList[this.tile]).createNewTileEntity(var1));
             var1.setBlock(var2, var3, var4, Blocks.air, 0, 2);
         }
     }
@@ -108,17 +117,30 @@ public class EntityMovingBlock extends Entity implements IEntityAdditionalSpawnD
         // new kill off when distant method
         if (!worldObj.isRemote) {
             if (this.worldObj.getClosestPlayer(this.posX, 50, this.posZ, 140) == null) {
-                // Restore the block at its current in-flight position so it is not
+                // Restore the block near its original ripped position so it is not
                 // permanently deleted when a player moves out of range.
                 if (!CoroUtilBlock.isAir(this.tile)) {
-                    int bx = MathHelper.floor_double(this.posX);
-                    int by = MathHelper.floor_double(this.posY);
-                    int bz = MathHelper.floor_double(this.posZ);
-                    if (this.worldObj.isAirBlock(bx, by, bz)) {
-                        this.worldObj.setBlock(bx, by, bz, this.tile, this.metadata, 3);
+                    // First choice: put the block back exactly where it came from.
+                    if (this.worldObj.isAirBlock(this.originalX, this.originalY, this.originalZ)) {
+                        this.worldObj
+                            .setBlock(this.originalX, this.originalY, this.originalZ, this.tile, this.metadata, 3);
                         if (this.tileentity != null) {
-                            this.worldObj.setTileEntity(bx, by, bz, this.tileentity);
+                            this.worldObj
+                                .setTileEntity(this.originalX, this.originalY, this.originalZ, this.tileentity);
                         }
+                    } else {
+                        // Original position is occupied; drop to the top of the same XZ column
+                        // so the block lands on the ground rather than floating in the sky.
+                        int surfaceY = this.worldObj.getHeightValue(this.originalX, this.originalZ);
+                        if (surfaceY < 255 && this.worldObj.isAirBlock(this.originalX, surfaceY, this.originalZ)) {
+                            this.worldObj
+                                .setBlock(this.originalX, surfaceY, this.originalZ, this.tile, this.metadata, 3);
+                            if (this.tileentity != null) {
+                                this.worldObj.setTileEntity(this.originalX, surfaceY, this.originalZ, this.tileentity);
+                            }
+                        }
+                        // If the column is completely full the block is simply dropped —
+                        // vanishing is preferable to creating a floating mid-air block.
                     }
                 }
                 setDead();
@@ -376,9 +398,21 @@ public class EntityMovingBlock extends Entity implements IEntityAdditionalSpawnD
             || ConfigMisc.Storm_Tornado_rarityOfBreakOnFall > 0
                 && this.rand.nextInt(ConfigMisc.Storm_Tornado_rarityOfBreakOnFall + 1) != 0) {
             if (!WeatherUtil.shouldRemoveBlock(var5) && !WeatherUtil.isOceanBlock(var5) && var2 < 255) {
-                // Target position is solid — stack our block on top of it.
-                // Do NOT also write to var2; that would overwrite the solid block we just landed on.
-                this.worldObj.setBlock(var1, var2 + 1, var3, this.tile, this.metadata, 3);
+                // Target position is solid — only stack on top if the slot above is free.
+                // Without the air-block check the existing block at var2+1 would be
+                // silently overwritten and permanently lost (bug fix).
+                if (this.worldObj.isAirBlock(var1, var2 + 1, var3)) {
+                    this.worldObj.setBlock(var1, var2 + 1, var3, this.tile, this.metadata, 3);
+                    // Restore tile-entity data (chest contents, furnace state, etc.) in this
+                    // branch too — previously only the direct-placement else-branch did this,
+                    // causing tile-entity blocks that land on solid ground to lose all their
+                    // stored data (bug fix).
+                    if (this.tileentity != null) {
+                        this.worldObj.setTileEntity(var1, var2 + 1, var3, this.tileentity);
+                    }
+                }
+                // If var2+1 is occupied the carried block is dropped (lost), which is
+                // preferable to destroying the structure block already occupying that slot.
             } else {
                 // Target position is free (air, replaceable, etc.) — place directly there.
                 boolean var6 = false;
@@ -408,6 +442,9 @@ public class EntityMovingBlock extends Entity implements IEntityAdditionalSpawnD
         var1.setString("Tile", Block.blockRegistry.getNameForObject(tile));
         var1.setByte("Metadata", (byte) this.metadata);
         var1.setInteger("blocktype", type);
+        var1.setInteger("origX", this.originalX);
+        var1.setInteger("origY", this.originalY);
+        var1.setInteger("origZ", this.originalZ);
         NBTTagCompound var2 = new NBTTagCompound();
 
         if (this.tileentity != null) {
@@ -415,7 +452,6 @@ public class EntityMovingBlock extends Entity implements IEntityAdditionalSpawnD
         }
 
         var1.setTag("TileEntity", var2);
-
     }
 
     @Override
@@ -423,6 +459,9 @@ public class EntityMovingBlock extends Entity implements IEntityAdditionalSpawnD
         this.tile = (Block) Block.blockRegistry.getObject(var1.getString("Tile"));
         this.metadata = var1.getByte("Metadata") & 15;
         this.type = var1.getInteger("blocktype");
+        this.originalX = var1.getInteger("origX");
+        this.originalY = var1.getInteger("origY");
+        this.originalZ = var1.getInteger("origZ");
         this.tileentity = null;
 
         if (this.tile instanceof BlockContainer) {

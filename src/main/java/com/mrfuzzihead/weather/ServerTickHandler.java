@@ -143,10 +143,9 @@ public class ServerTickHandler {
         if (wm != null) {
             listWeatherMans.remove(wm);
             lookupDimToWeatherMan.remove(dim);
+            // wm.readFromFile();
+            wm.writeToFile();
         }
-
-        // wm.readFromFile();
-        wm.writeToFile();
     }
 
     public static void playerJoinedServerSyncFull(EntityPlayerMP entP) {
@@ -166,14 +165,20 @@ public class ServerTickHandler {
     }
 
     public static void reset() {
+        // Collect dims first to avoid index-skip: removeWorldFromWeather calls
+        // listWeatherMans.remove() which shifts elements left, causing the loop
+        // counter to skip every other manager when iterating forward.
         // World worlds[] = DimensionManager.getWorlds();
         // for (int i = 0; i < worlds.length; i++) {
+        List<Integer> dimsToRemove = new ArrayList<Integer>();
         for (int i = 0; i < listWeatherMans.size(); i++) {
             WeatherManagerBase wm = listWeatherMans.get(i);
-            int dim = wm.dim;
-            if (lookupDimToWeatherMan.containsKey(dim)) {
-                removeWorldFromWeather(dim);
+            if (lookupDimToWeatherMan.containsKey(wm.dim)) {
+                dimsToRemove.add(wm.dim);
             }
+        }
+        for (int i = 0; i < dimsToRemove.size(); i++) {
+            removeWorldFromWeather(dimsToRemove.get(i));
         }
 
         // should never happen

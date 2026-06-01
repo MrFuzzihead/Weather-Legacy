@@ -16,7 +16,7 @@ import com.mrfuzzihead.weather.weathersystem.storm.StormObject;
 
 public class BlockTSensor extends Block {
 
-    public BlockTSensor(int var1) {
+    public BlockTSensor() {
         super(Material.clay);
         this.setTickRandomly(true);
     }

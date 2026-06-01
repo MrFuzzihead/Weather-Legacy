@@ -30,29 +30,20 @@ public class TileEntityTSiren extends TileEntity {
 
     @SideOnly(Side.CLIENT)
     public void tickClient() {
-
-        Minecraft mc = FMLClientHandler.instance()
-            .getClient();
-
-        if (this.lastPlayTime < System.currentTimeMillis()) {
-            StormObject so = ClientTickHandler.weatherManager.getClosestStorm(
-                Vec3.createVectorHelper(xCoord, yCoord, zCoord),
-                ConfigMisc.sirenActivateDistance,
-                StormObject.STATE_FORMING);
-
-            if (so != null) {
-                // if (so.attrib_tornado_severity > 0) {
-                // Weather.dbg("soooooouuuunnnnddddddd");
-                this.lastPlayTime = System.currentTimeMillis() + 13000L;
-                /* this.soundID = */WeatherUtilSound.playNonMovingSound(
-                    Vec3.createVectorHelper(xCoord, yCoord, zCoord),
-                    Weather.modID + ":streaming.siren",
-                    1.0F,
-                    1.0F,
-                    120);
-                // }
-            }
+        // Only play when driven by a redstone signal.
+        // Redstone wire/lever power levels are part of block metadata,
+        // which is always synced server→client, so this check is safe client-side.
+        if (!worldObj.isBlockIndirectlyGettingPowered(xCoord, yCoord, zCoord) || this.lastPlayTime > System.currentTimeMillis()) {
+            return;
         }
+
+        this.lastPlayTime = System.currentTimeMillis() + 13000L;
+        WeatherUtilSound.playNonMovingSound(
+            Vec3.createVectorHelper(xCoord, yCoord, zCoord),
+            Weather.modID + ":streaming.siren",
+            1.0F,
+            1.0F,
+            120);
     }
 
     public void writeToNBT(NBTTagCompound var1) {

@@ -54,18 +54,22 @@ public class TornadoHelper {
 
     public int getTornadoBaseSize() {
         int sizeChange = 10;
-        if (storm.levelCurIntensityStage >= StormObject.STATE_STAGE5) {
-            return sizeChange * 9;
+        if (storm.levelCurIntensityStage >= StormObject.STATE_STAGE7) {
+            return sizeChange * 11; // F6
+        } else if (storm.levelCurIntensityStage >= StormObject.STATE_STAGE6) {
+            return sizeChange * 9; // F5
+        } else if (storm.levelCurIntensityStage >= StormObject.STATE_STAGE5) {
+            return sizeChange * 7; // F4
         } else if (storm.levelCurIntensityStage >= StormObject.STATE_STAGE4) {
-            return sizeChange * 7;
+            return sizeChange * 5; // F3
         } else if (storm.levelCurIntensityStage >= StormObject.STATE_STAGE3) {
-            return sizeChange * 5;
+            return sizeChange * 4; // F2
         } else if (storm.levelCurIntensityStage >= StormObject.STATE_STAGE2) {
-            return sizeChange * 4;
+            return sizeChange * 3; // F1
         } else if (storm.levelCurIntensityStage >= StormObject.STATE_STAGE1) {
-            return sizeChange * 3;
+            return sizeChange * 2; // F0
         } else if (storm.levelCurIntensityStage >= StormObject.STATE_FORMING) {
-            return sizeChange * 1;
+            return sizeChange * 1; // forming
         } else {
             return 5;
         }
@@ -99,7 +103,6 @@ public class TornadoHelper {
          */
 
         forceRotate(parWorld);
-
 
         // confirm this is correct, changing to formation use!
         // int spawnYOffset = (int) storm.currentTopYBlock;
@@ -307,7 +310,8 @@ public class TornadoHelper {
         boolean playerClose = parWorld.getClosestPlayer(
             storm.posBaseFormationPos.xCoord,
             storm.posBaseFormationPos.yCoord,
-            storm.posBaseFormationPos.zCoord, 140) != null;
+            storm.posBaseFormationPos.zCoord,
+            140) != null;
         if (!playerClose) return false;
 
         boolean seesLight = false;
@@ -332,8 +336,11 @@ public class TornadoHelper {
          */
         ) {
 
+            // Bug fix: was checking storm.pos / 16 (always loaded), must check the
+            // target block's chunk. Also use >> 4 instead of / 16 so that negative
+            // block coordinates near 0 map to the correct (negative) chunk index.
             if (parWorld.getChunkProvider()
-                .chunkExists((int) storm.pos.xCoord / 16, (int) storm.pos.zCoord / 16)
+                .chunkExists(tryX >> 4, tryZ >> 4)
                 && /* mod_EntMover.getFPS() > mod_EntMover.safetyCutOffFPS && */blockCount
                     <= ConfigMisc.Storm_Tornado_maxBlocksPerStorm
                 && lastGrabTime < System.currentTimeMillis()
@@ -354,7 +361,8 @@ public class TornadoHelper {
 
                     blockCount++;
 
-                    // if (WeatherMod.debug && parWorld.getWorldTime() % 60 == 0) System.out.println("ripping, count: " + WeatherMod.blockCount);
+                    // if (WeatherMod.debug && parWorld.getWorldTime() % 60 == 0) System.out.println("ripping, count: "
+                    // + WeatherMod.blockCount);
 
                     mBlock.setPosition(tryX, tryY, tryZ);
 
@@ -646,7 +654,6 @@ public class TornadoHelper {
 
     public boolean tryPlaySound(String[] sound, int arrIndex, Entity source, float vol, float parCutOffRange) {
         Entity soundTarget = source;
-
 
         // should i?
         // soundTarget = this;

@@ -73,7 +73,6 @@ public class WindManager {
     public WindManager(WeatherManagerBase parManager) {
         manager = parManager;
 
-
         windAngleGlobal = rand.nextInt(360);
     }
 
@@ -146,7 +145,6 @@ public class WindManager {
     }
 
     public void tick() {
-
 
         // debug
         // Weather.dbg("wind angle: " + windAngleGlobal);

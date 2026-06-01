@@ -86,6 +86,20 @@ public class StormObject {
     public static int static_YPos_layer2 = 500;
     public static List<Integer> layers = new ArrayList<Integer>(
         Arrays.asList(static_YPos_layer0, static_YPos_layer1, static_YPos_layer2));
+
+    /**
+     * Called by {@link com.mrfuzzihead.weather.config.ConfigMisc#hookUpdatedValues()}
+     * whenever config values change at runtime (e.g., via the in-game EZGui panel).
+     * Updates {@link #static_YPos_layer0} and the {@link #layers} list in-place so
+     * that newly spawned clouds and all callers of {@code layers.get(0)} immediately
+     * use the new height without requiring a server restart.
+     */
+    public static void refreshLayerHeights() {
+        static_YPos_layer0 = ConfigMisc.Cloud_Layer0_Height;
+        layers.set(0, static_YPos_layer0);
+        // layer1 and layer2 have no config equivalent yet; kept as fixed constants.
+    }
+
     public int layer = 0;
     public Vec3 pos = Vec3.createVectorHelper(0, static_YPos_layer0, 0);
     public Vec3 posGround = Vec3.createVectorHelper(0, 0, 0);
@@ -108,7 +122,9 @@ public class StormObject {
     // public float levelWindDirectionAdjust = 0; //for persistent direction change i- wait just calculate on the fly
     // based on temperature
 
-    public int levelWaterStartRaining = 100;
+    // Initialised from config so that Storm_Rain_WaterBuildUp actually takes effect.
+    // Previously this was hardcoded to 100, making the config value a no-op.
+    public int levelWaterStartRaining = ConfigMisc.Storm_Rain_WaterBuildUp;
 
     // storm data, used when its determined a storm will happen from cloud front collisions
     // public float levelStormIntensityMax = 0; //calculated from colliding warm and cold fronts, used to determine how
@@ -121,7 +137,7 @@ public class StormObject {
     // public boolean isRealStorm = false;
     public boolean hasStormPeaked = false;
 
-    public int maxIntensityStage = STATE_STAGE5;
+    public int maxIntensityStage = STATE_STAGE7;
 
     // used to mark difference between land and water based storms
     public int stormType = TYPE_LAND;
@@ -134,11 +150,31 @@ public class StormObject {
     public static int STATE_HIGHWIND = 2;
     public static int STATE_HAIL = 3;
     public static int STATE_FORMING = 4; // forming tornado for land, for water... stage 0 or something?
-    public static int STATE_STAGE1 = 5; // these are for both tornadoes (land) and tropical cyclones (water)
-    public static int STATE_STAGE2 = 6;
-    public static int STATE_STAGE3 = 7;
-    public static int STATE_STAGE4 = 8;
-    public static int STATE_STAGE5 = 9; // counts as hurricane for water
+    public static int STATE_STAGE1 = 5; // F0 tornado / Tropical Cyclone 1
+    public static int STATE_STAGE2 = 6; // F1 tornado / Tropical Cyclone 2
+    public static int STATE_STAGE3 = 7; // F2 tornado / Tropical Cyclone 3
+    public static int STATE_STAGE4 = 8; // F3 tornado / Tropical Cyclone 4
+    public static int STATE_STAGE5 = 9; // F4 tornado / Tropical Cyclone 5 (hurricane threshold for water)
+    public static int STATE_STAGE6 = 10; // F5 tornado / Hurricane
+    public static int STATE_STAGE7 = 11; // F6 tornado / Super-Hurricane
+
+    /**
+     * Per-stage tornado/cyclone progression odds (1-in-N per check, ~8 checks per stage at default tick rate).
+     * Calibrated to match real-life EF-scale frequency distribution (SPC annual averages: F0≈56%, F1≈26%,
+     * F2≈11%, F3≈5%, F4≈1.5%, F5≈0.5%; F6 is a fictional cap).
+     * Indexed by (levelCurIntensityStage - STATE_FORMING):
+     * idx 0: FORMING→F0 ~83% | idx 1: F0→F1 ~45% | idx 2: F1→F2 ~42%
+     * idx 3: F2→F3 ~38% | idx 4: F3→F4 ~29% | idx 5: F4→F5 ~25%
+     * idx 6: F5→F6 ~10%
+     */
+    private static final int[] TORNADO_STAGE_PROGRESSION_ODDS = { 5, // FORMING → F0 (~83%)
+        14, // F0 → F1 (~45%)
+        15, // F1 → F2 (~42%)
+        17, // F2 → F3 (~38%)
+        24, // F3 → F4 (~29%)
+        28, // F4 → F5 (~25%)
+        77, // F5 → F6 (~10%)
+    };
 
     // helper val, adjust with flags method
     public static float levelStormIntensityFormingStartVal = STATE_FORMING;
@@ -276,18 +312,33 @@ public class StormObject {
         motion = Vec3.createVectorHelper(var1.getDouble("vecX"), var1.getDouble("vecY"), var1.getDouble("vecZ"));
         angleIsOverridden = var1.getBoolean("angleIsOverridden");
         angleMovementTornadoOverride = var1.getFloat("angleMovementTornadoOverride");
+
+        // Bug fix: restore userSpawnedFor so per-player storm-formation cooldowns
+        // survive a server restart. Falls back to "" for pre-fix save files,
+        // which is the same default the field already had before this fix.
+        userSpawnedFor = var1.getString("userSpawnedFor");
     }
 
     public NBTTagCompound writeToNBT() {
-
-        nbtSyncForClient();
-        NBTTagCompound nbt = cachedClientNBTState;
+        // Use nbtSyncForClientFull() — NOT nbtSyncForClient() — so that:
+        // 1. The returned compound contains the complete current state (suitable for disk).
+        // 2. cachedClientNBTState is reset to the full current state, preserving the
+        // ability of future nbtSyncForClient() calls to delta correctly.
+        // Calling nbtSyncForClient() here would advance the delta pointer, causing any
+        // field changes that occurred since the last client sync to be silently dropped
+        // from the next periodic client update.
+        NBTTagCompound nbt = nbtSyncForClientFull();
 
         nbt.setDouble("vecX", motion.xCoord);
         nbt.setDouble("vecY", motion.yCoord);
         nbt.setDouble("vecZ", motion.zCoord);
         nbt.setBoolean("angleIsOverridden", angleIsOverridden);
         nbt.setFloat("angleMovementTornadoOverride", angleMovementTornadoOverride);
+
+        // Bug fix: persist userSpawnedFor so that after a server restart each
+        // reloaded storm still tracks per-player cooldowns correctly instead of
+        // every storm sharing the PlayerData.getPlayerNBT("") entry.
+        nbt.setString("userSpawnedFor", userSpawnedFor);
 
         return nbt;
     }
@@ -502,17 +553,56 @@ public class StormObject {
 
     }
 
+    /**
+     * Produces a <em>full</em> state dump, bypassing the delta-compression that
+     * {@link #nbtSyncForClient()} normally applies.
+     *
+     * <p>
+     * {@link #nbtSyncForClient()} only writes fields whose values differ from
+     * {@link #cachedClientNBTState}. This is correct for routine periodic updates
+     * but wrong when sending a storm to a client that has no prior state (e.g. on
+     * initial join or reconnect). In those cases every field must be present in the
+     * packet, otherwise the client fills absent fields with zero/false/0.0.
+     *
+     * <p>
+     * The method works by temporarily nulling {@link #cachedClientNBTState} so
+     * that {@link CachedNBTTagCompound} treats every field as "new" and writes it
+     * unconditionally. {@link #nbtSyncForClient()} also updates
+     * {@link #cachedClientNBTState} to the full current state as a side-effect, so
+     * subsequent delta updates continue to work correctly after this call.
+     */
+    public NBTTagCompound nbtSyncForClientFull() {
+        NBTTagCompound savedCache = cachedClientNBTState;
+        cachedClientNBTState = null;
+        try {
+            return nbtSyncForClient();
+        } catch (RuntimeException e) {
+            // Restore the cache so a failure here doesn't permanently break delta sync.
+            cachedClientNBTState = savedCache;
+            throw e;
+        }
+    }
+
     public NBTTagCompound nbtForIMC() {
-        // we basically need all the same data minus a few soooo whatever
-        return nbtSyncForClient();
+        // Use nbtSyncForClientFull() instead of nbtSyncForClient() to avoid
+        // corrupting the delta compression cache. nbtSyncForClient() would advance
+        // cachedClientNBTState to the current values, causing the next periodic
+        // client sync (which can fire as soon as 2 ticks later) to send an empty
+        // delta — dropping every field change that happened since the last sync.
+        // nbtSyncForClientFull() resets the cache to the full current state, so
+        // subsequent delta syncs remain accurate.
+        return nbtSyncForClientFull();
     }
 
     @SideOnly(Side.CLIENT)
     public void tickRender(float partialTick) {
+        // Prototype ice-cube cloud rendering — disabled: crashes on RenderManager.renderEngine NPE
+        // and produces unintended giant ice blocks in the sky. Re-enable only once the renderer
+        // is properly implemented.
         // renderBlock.doRenderClouds(this, 0, 0, 0, 0, partialTick);
-        if (layer == 1) {
-            renderBlock.doRenderClouds(this, pos.xCoord, pos.yCoord, pos.zCoord, 0, partialTick);
-        }
+        // if (layer == 1) {
+        // renderBlock.doRenderClouds(this, pos.xCoord, pos.yCoord, pos.zCoord, 0, partialTick);
+        // }
     }
 
     public void tick() {
@@ -918,7 +1008,7 @@ public class StormObject {
                                         zzz + z,
                                         origMeta);
                                     // if detected a smooth out requirement
-                                    if (coords.posX != 0 || coords.posZ != 0) {
+                                    if (coords != null) {
                                         if (meta != coords.meta + 1) {
                                             // Weather.dbg("SMOOTHING PERFORM! - meta was: " + origMeta + " - is now
                                             // coords.meta: " + coords.meta);
@@ -952,14 +1042,16 @@ public class StormObject {
         // filter out diagonals
         ChunkCoordinatesBlock attempt;
         attempt = getSnowfallEvenOutAdjust(x - 1, y, z, sourceMeta);
-        if (attempt.posX != 0 || attempt.posZ != 0) return attempt;
+        if (attempt != null) return attempt;
         attempt = getSnowfallEvenOutAdjust(x + 1, y, z, sourceMeta);
-        if (attempt.posX != 0 || attempt.posZ != 0) return attempt;
+        if (attempt != null) return attempt;
         attempt = getSnowfallEvenOutAdjust(x, y, z - 1, sourceMeta);
-        if (attempt.posX != 0 || attempt.posZ != 0) return attempt;
+        if (attempt != null) return attempt;
         attempt = getSnowfallEvenOutAdjust(x, y, z + 1, sourceMeta);
-        if (attempt.posX != 0 || attempt.posZ != 0) return attempt;
-        return new ChunkCoordinatesBlock(0, 0, 0, Blocks.air, 0);
+        if (attempt != null) return attempt;
+        // No valid neighbour found — return null instead of a (0,0,0) sentinel so
+        // that coordinates at the world origin are not falsely treated as "no result".
+        return null;
     }
 
     // return relative values, id 0 (to mark its ok to start snow here) or id snow (to mark check meta), and meta of
@@ -981,7 +1073,8 @@ public class StormObject {
             // snow is halfway, before it can start a second pile
             if (CoroUtilBlock.isAir(checkID2)) {
                 // Weather.dbg("1");
-                return new ChunkCoordinatesBlock(0, 0, 0, Blocks.air, 0);
+                // No solid block below — not a valid spread target.
+                return null;
             } else {
                 // Weather.dbg("2");
                 // return that its an open area to start snow at
@@ -996,9 +1089,11 @@ public class StormObject {
                 return new ChunkCoordinatesBlock(x, y, z, checkID, checkMeta);
             }
         } else {
-            return new ChunkCoordinatesBlock(0, 0, 0, Blocks.air, 0);
+            // Not air and not snow — not a valid spread target.
+            return null;
         }
-        return new ChunkCoordinatesBlock(0, 0, 0, Blocks.air, 0);
+        // Snow exists but is already as deep as (or deeper than) the source — not a valid spread target.
+        return null;
     }
 
     public boolean canSnowAtBody(int par1, int par2, int par3) {
@@ -1100,7 +1195,6 @@ public class StormObject {
             }
 
             boolean performBuildup = false;
-
 
             if (!isPrecipitating() && rand.nextInt(randomChanceOfWaterBuildFromNothing) == 0) {
                 performBuildup = true;
@@ -1305,23 +1399,30 @@ public class StormObject {
 
                 float levelStormIntensityRate = 0.02F;
                 float minIntensityToProgress = 0.6F;
-                int oddsTo1OfIntensityProgressionBase = ConfigMisc.Storm_OddsTo1OfProgressionBase;
+                int oddsTo1OfIntensityProgression;
 
-                // speed up forming and greater progression
+                // speed up forming and greater progression; use Fujita-calibrated odds for tornado stages
                 if (levelCurIntensityStage >= levelStormIntensityFormingStartVal) {
                     levelStormIntensityRate *= 3;
-                    oddsTo1OfIntensityProgressionBase /= 3;
+                    // Real-life EF-scale frequency-calibrated per-stage table replaces the flat linear formula.
+                    // ~8 progression checks occur per stage at default tick rates.
+                    int tornadoIdx = levelCurIntensityStage - STATE_FORMING;
+                    oddsTo1OfIntensityProgression = (tornadoIdx >= 0
+                        && tornadoIdx < TORNADO_STAGE_PROGRESSION_ODDS.length)
+                            ? TORNADO_STAGE_PROGRESSION_ODDS[tornadoIdx]
+                            : 100; // safety fallback for any stage beyond the table
+                } else {
+                    // Pre-tornado stages (thunder, wind, hail) use the original linear config-driven formula
+                    oddsTo1OfIntensityProgression = ConfigMisc.Storm_OddsTo1OfProgressionBase
+                        + (levelCurIntensityStage * ConfigMisc.Storm_OddsTo1OfProgressionStageMultiplier);
                 }
-
-                int oddsTo1OfIntensityProgression = oddsTo1OfIntensityProgressionBase
-                    + (levelCurIntensityStage * ConfigMisc.Storm_OddsTo1OfProgressionStageMultiplier);
 
                 if (!hasStormPeaked) {
 
                     levelCurStagesIntensity += levelStormIntensityRate;
 
                     if (levelCurIntensityStage < maxIntensityStage
-                        && (!ConfigMisc.Storm_NoTornadosOrCyclones || levelCurIntensityStage < STATE_FORMING - 1)) {
+                        && (!ConfigMisc.Storm_NoTornadoesOrCyclones || levelCurIntensityStage < STATE_FORMING - 1)) {
                         if (levelCurStagesIntensity >= minIntensityToProgress) {
                             // Weather.dbg("storm ID: " + this.ID + " trying to hit next stage");
                             if (alwaysProgresses || rand.nextInt(oddsTo1OfIntensityProgression) == 0) {
@@ -1409,18 +1510,22 @@ public class StormObject {
     public WeatherEntityConfig getWeatherEntityConfigForStorm() {
         // default spout
         WeatherEntityConfig weatherConfig = WeatherTypes.weatherEntTypes.get(0);
-        if (levelCurIntensityStage >= STATE_STAGE5) {
-            weatherConfig = WeatherTypes.weatherEntTypes.get(5);
+        if (levelCurIntensityStage >= STATE_STAGE7) {
+            weatherConfig = WeatherTypes.weatherEntTypes.get(7); // F6
+        } else if (levelCurIntensityStage >= STATE_STAGE6) {
+            weatherConfig = WeatherTypes.weatherEntTypes.get(6); // F5
+        } else if (levelCurIntensityStage >= STATE_STAGE5) {
+            weatherConfig = WeatherTypes.weatherEntTypes.get(5); // F4
         } else if (levelCurIntensityStage >= STATE_STAGE4) {
-            weatherConfig = WeatherTypes.weatherEntTypes.get(4);
+            weatherConfig = WeatherTypes.weatherEntTypes.get(4); // F3
         } else if (levelCurIntensityStage >= STATE_STAGE3) {
-            weatherConfig = WeatherTypes.weatherEntTypes.get(3);
+            weatherConfig = WeatherTypes.weatherEntTypes.get(3); // F2
         } else if (levelCurIntensityStage >= STATE_STAGE2) {
-            weatherConfig = WeatherTypes.weatherEntTypes.get(2);
+            weatherConfig = WeatherTypes.weatherEntTypes.get(2); // F1
         } else if (levelCurIntensityStage >= STATE_STAGE1) {
-            weatherConfig = WeatherTypes.weatherEntTypes.get(1);
+            weatherConfig = WeatherTypes.weatherEntTypes.get(1); // F0
         } else if (levelCurIntensityStage >= STATE_FORMING) {
-            weatherConfig = WeatherTypes.weatherEntTypes.get(0);
+            weatherConfig = WeatherTypes.weatherEntTypes.get(0); // forming / waterspout
         }
         return weatherConfig;
     }
@@ -1463,8 +1568,16 @@ public class StormObject {
 
         if (stormToAbsorb != null) {
             Weather.dbg("stormfront collision happened between ID " + this.ID + " and " + stormToAbsorb.ID);
-            manager.removeStormObject(stormToAbsorb.ID);
-            ((WeatherManagerServer) manager).syncStormRemove(stormToAbsorb);
+            // Bug fix: do NOT call manager.removeStormObject() here — that immediately
+            // mutates listStormObjects via List.remove() while WeatherManagerBase.tick()
+            // is still iterating it, causing the element that slides into the removed
+            // slot to be silently skipped.
+            //
+            // Instead, just mark the absorbed storm as dead. The post-loop deferred-
+            // removal pass in tick() checks (isServer && so.isDead), adds it to
+            // toRemove, then calls removeStormObject() + syncStormRemove() after
+            // iteration is fully complete — safe from any index-skip corruption.
+            stormToAbsorb.setDead();
         } else {
             Weather.dbg("ocean storm happened, ID " + this.ID);
         }
@@ -1609,7 +1722,13 @@ public class StormObject {
 
         // adjust particle creation rate for upper tropical cyclone work
         if (stormType == TYPE_WATER) {
-            if (levelCurIntensityStage >= STATE_STAGE5) {
+            if (levelCurIntensityStage >= STATE_STAGE7) {
+                loopSize = 15;
+                extraSpawning = 1100;
+            } else if (levelCurIntensityStage >= STATE_STAGE6) {
+                loopSize = 12;
+                extraSpawning = 950;
+            } else if (levelCurIntensityStage >= STATE_STAGE5) {
                 loopSize = 10;
                 extraSpawning = 800;
             } else if (levelCurIntensityStage >= STATE_STAGE4) {
@@ -1717,7 +1836,15 @@ public class StormObject {
 
         double spawnRad = size / 48;
 
-        if (levelCurIntensityStage >= STATE_STAGE5) {
+        if (levelCurIntensityStage >= STATE_STAGE7) {
+            spawnRad = 350;
+            loopSize = 15;
+            sizeMaxFunnelParticles = 1800;
+        } else if (levelCurIntensityStage >= STATE_STAGE6) {
+            spawnRad = 250;
+            loopSize = 12;
+            sizeMaxFunnelParticles = 1500;
+        } else if (levelCurIntensityStage >= STATE_STAGE5) {
             spawnRad = 200;
             loopSize = 10;
             sizeMaxFunnelParticles = 1200;
@@ -1797,13 +1924,17 @@ public class StormObject {
             }
         }
 
+        // Deferred-removal: collecting dead entries and removing after the loop
+        // prevents the index-skip bug that occurs when list.remove() shifts elements
+        // left during a forward-index iteration.
+        List<EntityRotFX> toRemoveFunnel = new ArrayList<EntityRotFX>();
         for (int i = 0; i < listParticlesFunnel.size(); i++) {
             EntityRotFX ent = listParticlesFunnel.get(i);
             if (ent.isDead) {
-                listParticlesFunnel.remove(ent);
+                toRemoveFunnel.add(ent);
             } else if (ent.posY > pos.yCoord) {
                 ent.setDead();
-                listParticlesFunnel.remove(ent);
+                toRemoveFunnel.add(ent);
             } else {
                 double var16 = this.pos.xCoord - ent.posX;
                 double var18 = this.pos.zCoord - ent.posZ;
@@ -1827,11 +1958,13 @@ public class StormObject {
                 spinEntity(ent);
             }
         }
+        listParticlesFunnel.removeAll(toRemoveFunnel);
 
+        List<EntityRotFX> toRemoveCloud = new ArrayList<EntityRotFX>();
         for (int i = 0; i < listParticlesCloud.size(); i++) {
             EntityRotFX ent = listParticlesCloud.get(i);
             if (ent.isDead) {
-                listParticlesCloud.remove(ent);
+                toRemoveCloud.add(ent);
             } else {
                 // ent.posX = pos.xCoord + i*10;
                 /*
@@ -1985,14 +2118,16 @@ public class StormObject {
              * }
              */
         }
+        listParticlesCloud.removeAll(toRemoveCloud);
 
+        List<EntityRotFX> toRemoveGround = new ArrayList<EntityRotFX>();
         for (int i = 0; i < listParticlesGround.size(); i++) {
             EntityRotFX ent = listParticlesGround.get(i);
 
             double curDist = ent.getDistance(pos.xCoord, ent.posY, pos.zCoord);
 
             if (ent.isDead) {
-                listParticlesGround.remove(ent);
+                toRemoveGround.add(ent);
             } else {
                 double curSpeed = Math
                     .sqrt(ent.motionX * ent.motionX + ent.motionY * ent.motionY + ent.motionZ * ent.motionZ);
@@ -2030,6 +2165,7 @@ public class StormObject {
                 }
             }
         }
+        listParticlesGround.removeAll(toRemoveGround);
 
         // System.out.println("size: " + listParticlesCloud.size());
     }
@@ -2070,7 +2206,6 @@ public class StormObject {
         StormObject entT = this;
         StormObject entity = this;
         WeatherEntityConfig conf = getWeatherEntityConfigForStorm();// WeatherTypes.weatherEntTypes.get(curWeatherType);
-
 
         /*
          * if (entity instanceof EntTornado) {
@@ -2147,7 +2282,12 @@ public class StormObject {
             pullY += adjPull;
             // 0.2D / ((getWeight(entity1) * ((distXZ+1D) / radius)) * (((distY) / maxHeight)) * 3D);
             // grab = grab + (10D * ((distY / maxHeight) * 1D));
-            double adjGrab = (10D * (((float) (((double) WeatherUtilEntity.playerInAirTime + 1D) / 400D))));
+            // Read the per-entity air-time counter from NBT (written by getWeight())
+            // instead of the old shared static field so that each player in a
+            // multiplayer game uses their own independent value.
+            int playerAirTime = entity1.getEntityData()
+                .getInteger("timeInAir");
+            double adjGrab = (10D * (((float) (((double) playerAirTime + 1D) / 400D))));
 
             if (adjGrab > 50) {
                 adjGrab = 50D;
@@ -2287,7 +2427,14 @@ public class StormObject {
             .getLong("lastPullTime");
         if (lastPullTime == entity1.worldObj.getTotalWorldTime()) {
             // System.out.println("preventing double pull");
+            // Bug fix: zero ALL three force components, not just pullY.
+            // Without this, an entity in range of two simultaneous storms
+            // (e.g. a land tornado overlapping a waterspout) receives double
+            // horizontal force every tick, flinging it out of the grab radius
+            // far faster than intended and preventing the tornado from holding it.
             pullY = 0;
+            moveX = 0;
+            moveZ = 0;
         }
         entity1.getEntityData()
             .setLong("lastPullTime", entity1.worldObj.getTotalWorldTime());

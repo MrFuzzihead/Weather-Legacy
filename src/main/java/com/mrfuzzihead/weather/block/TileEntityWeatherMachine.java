@@ -38,10 +38,18 @@ public class TileEntityWeatherMachine extends TileEntity {
 
     public StormObject lastTickStormObject = null;
 
+    /**
+     * The ID of the storm that was active when the world was last saved.
+     * Non-zero only between readFromNBT() and the first successful reconnect
+     * in updateEntity(). Cleared once the lookup either succeeds or confirms
+     * the storm no longer exists.
+     */
+    private long savedStormID = 0L;
+
     public void cycleWeatherType() {
         weatherType++;
         int maxID = 6;
-        if (ConfigMisc.Storm_NoTornadosOrCyclones || ConfigMisc.Block_WeatherMachineNoTornadosOrCyclones) {
+        if (ConfigMisc.Storm_NoTornadoesOrCyclones || ConfigMisc.Block_WeatherMachineNoTornadoesOrCyclones) {
             maxID = 4;
         }
         if (weatherType > maxID) {
@@ -85,17 +93,37 @@ public class TileEntityWeatherMachine extends TileEntity {
                         .get(worldObj.provider.dimensionId);
 
                     if (manager != null) {
-                        StormObject so = new StormObject(manager);
-                        so.initFirstTime();
-                        so.pos = Vec3.createVectorHelper(xCoord, StormObject.layers.get(0), zCoord);
-                        so.layer = 0;
-                        so.userSpawnedFor = "" + xCoord + yCoord + zCoord;
-                        // so.canSnowFromCloudTemperature = true;
-                        so.naturallySpawned = false;
+                        // Bug fix: on server restart the weather manager reloads the storm
+                        // from disk and the machine's lastTickStormObject is null, so the
+                        // machine used to immediately create a second orphan storm.
+                        // Instead, try to reconnect to the storm that was active before
+                        // the restart by looking it up with the ID we saved to disk.
+                        if (savedStormID != 0L) {
+                            StormObject existing = manager.lookupStormObjectsByID.get(savedStormID);
+                            if (existing != null && !existing.isDead) {
+                                // Reclaim the storm: naturallySpawned is not persisted by
+                                // StormObject, so restore the machine-owned flag explicitly.
+                                existing.naturallySpawned = false;
+                                lastTickStormObject = existing;
+                            }
+                            // Whether we reconnected or the storm no longer exists, stop
+                            // attempting this lookup so we do not create a duplicate below.
+                            savedStormID = 0L;
+                        }
 
-                        manager.addStormObject(so);
-                        manager.syncStormNew(so);
-                        lastTickStormObject = so;
+                        if (lastTickStormObject == null) {
+                            StormObject so = new StormObject(manager);
+                            so.initFirstTime();
+                            so.pos = Vec3.createVectorHelper(xCoord, StormObject.layers.get(0), zCoord);
+                            so.layer = 0;
+                            so.userSpawnedFor = "" + xCoord + yCoord + zCoord;
+                            // so.canSnowFromCloudTemperature = true;
+                            so.naturallySpawned = false;
+
+                            manager.addStormObject(so);
+                            manager.syncStormNew(so);
+                            lastTickStormObject = so;
+                        }
                     }
                 }
             }
@@ -147,11 +175,17 @@ public class TileEntityWeatherMachine extends TileEntity {
     public void writeToNBT(NBTTagCompound var1) {
         super.writeToNBT(var1);
         var1.setInteger("weatherType", weatherType);
+        // Persist the active storm's ID so updateEntity() can reconnect to it
+        // after a server restart instead of creating a duplicate storm.
+        if (lastTickStormObject != null && !lastTickStormObject.isDead) {
+            var1.setLong("lastStormID", lastTickStormObject.ID);
+        }
     }
 
     public void readFromNBT(NBTTagCompound var1) {
         super.readFromNBT(var1);
         weatherType = var1.getInteger("weatherType");
-
+        // 0 if the key is absent (pre-fix saves or no storm was active).
+        savedStormID = var1.getLong("lastStormID");
     }
 }

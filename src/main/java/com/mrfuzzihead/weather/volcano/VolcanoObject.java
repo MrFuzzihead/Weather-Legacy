@@ -32,7 +32,8 @@ public class VolcanoObject {
     // used on both server and client side, mark things SideOnly where needed
 
     // management stuff
-    public static long lastUsedID = 0; // ID starts from 0, set on nbt load, who would max this out for volcanos? surely
+    public static long lastUsedID = 0; // ID starts from 0, set on nbt load, who would max this out for volcanoes?
+                                       // surely
                                        // this will never fail...
     public long ID;
     public WeatherManagerBase manager;
